@@ -76,7 +76,7 @@ class GoogleCloudController extends Controller
         // Riduci aleatorietà e permetti una risposta più lunga (aumenta se necessario)
         $generationConfig->setTemperature(0.0);
         // Aumenta il limite massimo di token di output per evitare che la risposta venga troncata
-        $generationConfig->setMaxOutputTokens(3000);
+        $generationConfig->setMaxOutputTokens(10000);
         // Genera un solo candidato (più semplice da parsare)
         $generationConfig->setCandidateCount(1);
         $generationConfig->setTopP(0.8);

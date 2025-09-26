@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Models\ProcessedFile;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use App\Jobs\GenerateFattura;
 
 class UploadController extends Controller
 {
@@ -45,6 +46,15 @@ class UploadController extends Controller
                 'gcs_path' => $objectPath,
                 'status' => 'uploaded',
             ]);
+
+            // Avvia il job di generazione fattura in coda
+            try {
+                GenerateFattura::dispatch($processed->id);
+            } catch (\Exception $e) {
+                Log::error('UploadController::failed to dispatch GenerateFattura', ['exception' => $e, 'processed_id' => $processed->id]);
+                // Non blocchiamo l'utente per il dispatch fallito; segnaliamo nel record
+                $processed->update(['status' => 'upload_postprocess_failed', 'error_message' => substr($e->getMessage(), 0, 1000)]);
+            }
 
             // Flash message e redirect indietro
             return redirect()->back()->with('status_message', "File caricato con successo: {$originalName}");
