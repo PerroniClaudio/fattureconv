@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UploadController;
 use App\Models\ProcessedFile;
 use Illuminate\Support\Facades\Storage;
+use App\Http\Controllers\ProcessedFileController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -40,3 +41,7 @@ Route::get('/generate-word', function() {
     return response()->download($wordPath);
 
 });
+
+// API per la UI: lista processed files e download
+Route::get('/api/processed-files', [ProcessedFileController::class, 'index']);
+Route::get('/processed-files/{id}/download', [ProcessedFileController::class, 'download'])->name('processed-files.download');

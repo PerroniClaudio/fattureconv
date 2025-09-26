@@ -41,27 +41,48 @@ class GenerateFattura implements ShouldQueue
             Log::warning('GenerateFattura: ProcessedFile non trovato', ['id' => $this->processedFileId]);
             return;
         }
+        $currentStep = 'started';
 
         try {
             // 1) Estrai testo dal PDF e aggiorna il modello
+            $currentStep = 'parsing_pdf';
+            $processedFile->status = $currentStep;
+            $processedFile->save();
+
             $pdfParser = new PdfParserController();
             $text = $pdfParser->extractAndOptimize($processedFile);
 
             // 2) Chiama Vertex AI per estrarre i dati strutturati
+            $currentStep = 'calling_ai';
+            $processedFile->status = $currentStep;
+            $processedFile->save();
+
             $google = new GoogleCloudController();
             $response = $google->callVertexAI($text);
 
             // Salva risposta strutturata e testo
             $processedFile->structured_json = $response;
             $processedFile->extracted_text = $text;
-            $processedFile->status = 'processed';
+            $processedFile->status = 'ai_completed';
             $processedFile->save();
 
             // 3) Genera file Word localmente usando DocumentController
+            $currentStep = 'generating_word';
+            $processedFile->status = $currentStep;
+            $processedFile->save();
+
             $docController = new DocumentController();
             $localWordPath = $docController->generateFromTemplate($processedFile);
 
+            // dopo la generazione locale
+            $processedFile->status = 'word_generated';
+            $processedFile->save();
+
             // 4) Carica il file Word su bucket GCS e salva il path nel modello
+            $currentStep = 'uploading_word';
+            $processedFile->status = $currentStep;
+            $processedFile->save();
+
             if (file_exists($localWordPath)) {
                 $disk = Storage::disk('gcs');
                 $gcsPath = 'processed_words/' . basename($localWordPath);
@@ -72,30 +93,38 @@ class GenerateFattura implements ShouldQueue
                     throw new Exception('Impossibile aprire il file Word per l upload: ' . $localWordPath);
                 }
 
-                $disk->put($gcsPath, $stream);
+                // preferiamo putStream se disponibile
+                if (method_exists($disk, 'putStream')) {
+                    call_user_func([$disk, 'putStream'], $gcsPath, $stream);
+                } else {
+                    $disk->put($gcsPath, $stream);
+                }
+
                 if (is_resource($stream)) fclose($stream);
 
                 // Aggiorniamo il modello con il percorso nel bucket
                 $processedFile->word_path = $gcsPath;
+                $processedFile->status = 'completed';
                 $processedFile->save();
 
                 // Rimuoviamo il file locale se presente
                 @unlink($localWordPath);
             } else {
                 Log::warning('GenerateFattura: file Word generato non trovato', ['path' => $localWordPath]);
+                $processedFile->status = 'word_missing';
+                $processedFile->save();
             }
 
         } catch (Exception $e) {
-            Log::error('GenerateFattura failed', ['exception' => $e, 'processed_file_id' => $this->processedFileId]);
+            Log::error('GenerateFattura failed', ['exception' => $e, 'processed_file_id' => $this->processedFileId, 'step' => $currentStep]);
             // Aggiorna lo stato dell'entità in caso di errore
             try {
                 $processedFile->status = 'error';
-                $processedFile->error_message = substr($e->getMessage(), 0, 1000);
+                $processedFile->error_message = '[' . $currentStep . '] ' . substr($e->getMessage(), 0, 1000);
                 $processedFile->save();
             } catch (Exception $inner) {
                 Log::error('GenerateFattura failed to update ProcessedFile after exception', ['exception' => $inner]);
             }
-            // Rilanciare non necessario, la job può terminare qui e la coda gestirà i tentativi
             return;
         }
     }
