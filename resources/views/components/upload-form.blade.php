@@ -12,22 +12,5 @@
         <input type="hidden" name="processed_ids" id="processed-ids" />
       </div>
     </form>
-    <script>
-      // collect FilePond server response ids
-      document.addEventListener('DOMContentLoaded', function () {
-        const pond = FilePond.find(document.querySelector('#pdf-file'));
-        if (!pond) return;
-
-        const ids = [];
-        pond.on('processfile', (error, file) => {
-          if (!error) {
-            // server returned the processed id as responseText
-            const serverId = file.serverId;
-            ids.push(serverId);
-            document.getElementById('processed-ids').value = ids.join(',');
-          }
-        });
-      });
-    </script>
   </div>
 </div>

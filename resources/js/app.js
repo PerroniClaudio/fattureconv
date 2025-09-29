@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 			import('filepond-plugin-file-validate-type')
 		]);
 
-		FilePond.registerPlugin(FilePondPluginFileValidateType);
 
 		const FilePond = FilePondModule.default || FilePondModule;
 		const FilePondPluginFileValidateType = FilePondPluginModule.default || FilePondPluginModule;
@@ -46,6 +45,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 			const inProgressTab = document.querySelector('[data-tab="in-progress"]');
 			if (inProgressTab) inProgressTab.click();
 		});
+
+		// collect FilePond server response ids and write to hidden input
+		const processedIdsContainer = document.getElementById('processed-ids');
+		const processedIdsInput = document.getElementById('processed-ids');
+		if (processedIdsInput) {
+			const ids = [];
+			pond.on('processfile', (error, file) => {
+				if (!error) {
+					const serverId = file.serverId || (file.serverId === 0 ? '0' : null);
+					if (serverId) {
+						ids.push(serverId);
+						processedIdsInput.value = ids.join(',');
+					}
+				}
+			});
+		}
 	}
 
 	// Jobs Table: load only when element exists
