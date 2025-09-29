@@ -7,6 +7,45 @@ use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\ProcessedFileController;
 use App\Http\Controllers\ZipExportController;
 
+// Public routes for favicon and logo served from GCS (simplified)
+Route::get('/favicon.ico', function () {
+    $disk = Storage::disk('gcs');
+    $path = 'assets/favicon-ift.png';
+
+    try {
+        if (! $disk->exists($path)) {
+            return response('', 404);
+        }
+
+        $content = $disk->get($path);
+        $mime = Storage::mimeType($path) ?: 'image/png';
+        return response($content, 200)
+            ->header('Content-Type', $mime)
+            ->header('Cache-Control', 'public, max-age=86400');
+    } catch (\Exception $e) {
+        return response('Error fetching favicon', 500);
+    }
+});
+
+Route::get('/logo', function () {
+    $disk = Storage::disk('gcs');
+    $path = 'assets/logo-header-ift.png';
+
+    try {
+        if (! $disk->exists($path)) {
+            return response('', 404);
+        }
+
+        $content = $disk->get($path);
+        $mime = Storage::mimeType($path) ?: 'image/png';
+        return response($content, 200)
+            ->header('Content-Type', $mime)
+            ->header('Cache-Control', 'public, max-age=86400');
+    } catch (\Exception $e) {
+        return response('Error fetching logo', 500);
+    }
+});
+
 Route::get('/', function () {
     return view('login');
 });
