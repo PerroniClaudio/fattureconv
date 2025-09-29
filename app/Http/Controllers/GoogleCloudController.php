@@ -27,6 +27,7 @@ class GoogleCloudController extends Controller
             - iva_percentuale: percentuale IVA (es. 22)
             - iva_importo: importo IVA (numero con 2 decimali)
             - totale_dovuto: totale finale (numero con 2 decimali e valuta, es. EUR)
+            - valuta: valuta usata (es. EUR, USD)
             - items: array di oggetti con descrizione, imponibile + valuta, %iva o art. esenzione, importo iva
 
             Ignora header, footer, loghi o testo irrilevante. Se un campo non è presente, usa 'N/A'.

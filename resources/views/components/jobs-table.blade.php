@@ -83,7 +83,7 @@
             case 'pending': return 'In coda';
             case 'uploaded': return 'Caricato';
             case 'parsing_pdf': return 'Estrazione PDF';
-            case 'calling_ai': return 'Analisi dati estratti';
+            case 'calling_ai': return 'Analisi dati';
             case 'ai_completed': return 'Analisi completata';
             case 'generating_word': return 'Generazione documento';
             case 'word_generated': return 'Documento generato';
