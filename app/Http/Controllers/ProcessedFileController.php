@@ -19,6 +19,37 @@ class ProcessedFileController extends Controller
     }
 
     /**
+     * Return statuses for a set of IDs. Expects JSON body: { ids: [1,2,3] }
+     */
+    public function statuses(Request $request)
+    {
+        $ids = $request->input('ids', []);
+        if (!is_array($ids) || empty($ids)) {
+            return response()->json([], 200);
+        }
+
+        $files = ProcessedFile::whereIn('id', $ids)->get(['id','status','word_path','error_message','structured_json','extracted_text','original_filename','gcs_path','created_at']);
+
+        // return as object keyed by id for easier client updates
+        $payload = [];
+        foreach ($files as $f) {
+            $payload[$f->id] = [
+                'id' => $f->id,
+                'status' => $f->status,
+                'word_path' => $f->word_path,
+                'error_message' => $f->error_message,
+                'structured_json' => $f->structured_json,
+                'extracted_text' => $f->extracted_text,
+                'original_filename' => $f->original_filename,
+                'gcs_path' => $f->gcs_path,
+                'created_at' => optional($f->created_at)->toDateTimeString(),
+            ];
+        }
+
+        return response()->json($payload, 200);
+    }
+
+    /**
      * Scarica il file Word dal bucket (se presente) oppure dal storage locale
      */
     public function download($id)

@@ -11,7 +11,8 @@ Route::get('/', function () {
 });
 
 Route::get('/app', function () {
-    return view('welcome');
+    $processedFiles = ProcessedFile::orderBy('created_at', 'desc')->paginate(15);
+    return view('welcome', compact('processedFiles'));
 });
 
 // Endpoint per upload PDF (multipart form POST)
@@ -35,6 +36,7 @@ Route::get('/export', function() {
 
 // API per la UI: lista processed files e download
 Route::get('/api/processed-files', [ProcessedFileController::class, 'index']);
+Route::post('/api/processed-files/statuses', [ProcessedFileController::class, 'statuses']);
 Route::get('/processed-files/{id}/download', [ProcessedFileController::class, 'download'])->name('processed-files.download');
 
 require __DIR__.'/auth.php';

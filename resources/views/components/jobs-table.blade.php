@@ -13,9 +13,83 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td colspan="5" class="text-center">Caricamento...</td></tr>
+          @if(isset($processedFiles) && $processedFiles->count())
+            @foreach($processedFiles as $row)
+              @php
+                $status = strtolower($row->status ?? '');
+                $labels = [
+                  'pending' => 'In coda',
+                  'uploaded' => 'Caricato',
+                  'parsing_pdf' => 'Estrazione PDF',
+                  'calling_ai' => 'Analisi dati',
+                  'ai_completed' => 'Analisi completata',
+                  'generating_word' => 'Generazione documento',
+                  'word_generated' => 'Documento generato',
+                  'uploading_word' => 'Upload documento',
+                  'completed' => 'Completato',
+                  'word_missing' => 'Documento mancante',
+                  'processing' => 'In elaborazione',
+                  'error' => 'Errore',
+                ];
+                $label = $labels[$status] ?? (\Illuminate\Support\Str::title(str_replace('_', ' ', $row->status ?? '—')));
+                $badgeClass = 'badge';
+                if (in_array($status, ['processed', 'completed', 'ai_completed', 'completato'])) {
+                  $badgeClass = 'badge badge-success';
+                } elseif (in_array($status, ['error', 'errore'])) {
+                  $badgeClass = 'badge badge-error';
+                } elseif (in_array($status, ['uploaded','pending','processing','parsing_pdf','calling_ai','generating_word','uploading_word'])) {
+                  $badgeClass = 'badge badge-secondary';
+                }
+                $date = $row->created_at ? $row->created_at->format('Y-m-d H:i:s') : '';
+                $fileName = $row->original_filename ?? $row->gcs_path ?? '—';
+              @endphp
+              <tr data-id="{{ $row->id }}">
+                <th>{{ $row->id }}</th>
+                <td>{{ $fileName }}</td>
+                <td class="status-cell">
+                  @if(in_array($status, ['error','errore']))
+                    <button class="badge badge-error" title="{{ $row->error_message ?? 'Errore non disponibile' }}" 
+                      data-error="{{ e($row->error_message ?? '') }}" 
+                      data-structured='{{ e(json_encode($row->structured_json ?? '')) }}' 
+                      data-extracted='{{ e($row->extracted_text ?? '') }}' 
+                      data-file="{{ e($fileName) }}" 
+                      data-created_at="{{ e($row->created_at) }}" 
+                      data-id="{{ $row->id }}" 
+                      data-word_path="{{ e($row->word_path ?? '') }}"
+                      onclick="showErrorElement(this)">
+                      {{ $label }}
+                    </button>
+                  @else
+                    <span class="{{ $badgeClass }}">
+                      @if(in_array($status, ['uploaded','pending','processing','parsing_pdf','calling_ai','generating_word','uploading_word']))
+                        {{ $label }} <span class="loading loading-spinner loading-xs align-middle"></span>
+                      @else
+                        {{ $label }}
+                      @endif
+                    </span>
+                  @endif
+                </td>
+                <td>{{ $date }}</td>
+                <td class="actions-cell">
+                  @if($row->word_path)
+                    <a class="btn btn-sm btn-primary" href="{{ url('/processed-files/'.$row->id.'/download') }}" data-download-url="{{ url('/processed-files/'.$row->id.'/download') }}">Download</a>
+                  @else
+                    <button class="btn btn-sm btn-ghost" disabled>Non disponibile</button>
+                  @endif
+                </td>
+              </tr>
+            @endforeach
+          @else
+            <tr><td colspan="5" class="text-center">Nessun job trovato</td></tr>
+          @endif
         </tbody>
       </table>
+    </div>
+
+    <div class="mt-4">
+      @if(isset($processedFiles))
+        {{ $processedFiles->appends(request()->query())->links() }}
+      @endif
     </div>
     <!-- Modal dettagli errori -->
     <dialog id="errorModal" class="modal">
@@ -57,82 +131,8 @@
 
     <script>
       (function(){
-        const endpoint = '/api/processed-files';
+        const statusEndpoint = '/api/processed-files/statuses'; // POST { ids: [..] }
         const table = document.getElementById('jobs-table');
-
-        function renderStatusBadge(status) {
-          const s = (status || '').toLowerCase();
-          const label = statusLabel(s);
-          if (s === 'processed' || s === 'completed' || s === 'ai_completed' || s === 'completato') {
-            return `<span class="badge badge-success">${escapeHtml(label)}</span>`;
-          }
-          if (s === 'error' || s === 'errore') {
-            return `<span class="badge badge-error">${escapeHtml(label)}</span>`;
-          }
-          if (s === 'uploaded' || s === 'pending' || s === 'processing' || s === 'parsing_pdf' || s === 'calling_ai' || s === 'generating_word' || s === 'uploading_word') {
-            return `<span class="badge badge-secondary">
-                ${escapeHtml(label)} 
-                <span class="loading loading-spinner loading-xs align-middle"></span>
-              </span>`;
-          }
-          return `<span class="badge">${escapeHtml(label)}</span>`;
-        }
-
-        function statusLabel(status) {
-          switch ((status || '').toLowerCase()) {
-            case 'pending': return 'In coda';
-            case 'uploaded': return 'Caricato';
-            case 'parsing_pdf': return 'Estrazione PDF';
-            case 'calling_ai': return 'Analisi dati';
-            case 'ai_completed': return 'Analisi completata';
-            case 'generating_word': return 'Generazione documento';
-            case 'word_generated': return 'Documento generato';
-            case 'uploading_word': return 'Upload documento';
-            case 'completed': return 'Completato';
-            case 'word_missing': return 'Documento mancante';
-            case 'processing': return 'In elaborazione';
-            case 'error': return 'Errore';
-            default:
-              // prettify unknown: replace underscores and capitalize
-              return String(status || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
-          }
-        }
-
-        function buildRow(row) {
-          const date = row.created_at ? new Date(row.created_at).toLocaleString() : '';
-          const file = row.original_filename || row.gcs_path || '—';
-          const id = row.id;
-          const status = row.status || '—';
-          const hasWord = !!row.word_path;
-
-          // costruisci lo stato con tooltip/alert in caso di errore
-          let statusHtml = '';
-          const s = (status || '').toLowerCase();
-          if (s === 'error' || s === 'errore') {
-            const msg = escapeHtml(row.error_message || 'Errore non disponibile');
-            const structured = escapeHtml(JSON.stringify(row.structured_json || '', null, 2));
-            const extracted = escapeHtml(row.extracted_text || '');
-            const fileAttr = escapeHtml(row.original_filename || row.gcs_path || '');
-            const createdAt = escapeHtml(row.created_at || '');
-            const wordPath = escapeHtml(row.word_path || '');
-            // title for tooltip, onclick to open detailed modal with data attributes
-            statusHtml = `<button class="badge badge-error" title="${msg}" data-error="${msg}" data-structured='${structured}' data-extracted='${extracted}' data-file="${fileAttr}" data-created_at="${createdAt}" data-id="${id}" data-word_path="${wordPath}" onclick="showErrorElement(this)">${escapeHtml(status)}</button>`;
-          } else {
-            statusHtml = renderStatusBadge(escapeHtml(status));
-          }
-
-          return `
-            <tr>
-              <th>${id}</th>
-              <td>${escapeHtml(file)}</td>
-              <td>${statusHtml}</td>
-              <td>${escapeHtml(date)}</td>
-              <td>
-                ${hasWord ? `<button class="btn btn-sm btn-primary" onclick="window.location='/processed-files/${id}/download'">Download</button>` : `<button class=\"btn btn-sm btn-ghost\" disabled>Non disponibile</button>`}
-              </td>
-            </tr>
-          `;
-        }
 
         function escapeHtml(unsafe) {
           if (unsafe === null || unsafe === undefined) return '';
@@ -144,35 +144,89 @@
             .replace(/'/g, '&#039;');
         }
 
-        async function fetchAndRender() {
-          try {
-            const res = await fetch(endpoint, {headers:{'Accept':'application/json'}});
-            if (!res.ok) throw new Error('Network response was not ok');
-            const data = await res.json();
+        // aggiorna una riga dato l'id e i dati di risposta
+        function updateRow(id, data) {
+          const tr = table.querySelector(`tr[data-id="${id}"]`);
+          if (!tr) return;
 
-            const tbody = table.querySelector('tbody');
-            tbody.innerHTML = '';
-            if (!Array.isArray(data) || data.length === 0) {
-              tbody.innerHTML = '<tr><td colspan="5" class="text-center">Nessun job trovato</td></tr>';
-              return;
-            }
+          const statusCell = tr.querySelector('.status-cell');
+          const actionsCell = tr.querySelector('.actions-cell');
 
-            for (const row of data) {
-              tbody.insertAdjacentHTML('beforeend', buildRow(row));
+          const status = (data.status || '').toLowerCase();
+          const labels = {
+            pending: 'In coda', uploaded: 'Caricato', parsing_pdf: 'Estrazione PDF', calling_ai: 'Analisi dati', ai_completed: 'Analisi completata', generating_word: 'Generazione documento', word_generated: 'Documento generato', uploading_word: 'Upload documento', completed: 'Completato', word_missing: 'Documento mancante', processing: 'In elaborazione', error: 'Errore'
+          };
+          const label = labels[status] || (data.status || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—';
+
+          // costruisci nuovo contenuto per lo status
+          if (status === 'error' || status === 'errore') {
+            const msg = data.error_message || 'Errore non disponibile';
+            const structured = JSON.stringify(data.structured_json || '', null, 2);
+            const extracted = data.extracted_text || '';
+            const fileAttr = data.original_filename || data.gcs_path || '';
+            const createdAt = data.created_at || '';
+            const wordPath = data.word_path || '';
+
+            statusCell.innerHTML = `<button class="badge badge-error" title="${escapeHtml(msg)}" data-error="${escapeHtml(msg)}" data-structured='${escapeHtml(structured)}' data-extracted='${escapeHtml(extracted)}' data-file="${escapeHtml(fileAttr)}" data-created_at="${escapeHtml(createdAt)}" data-id="${escapeHtml(id)}" data-word_path="${escapeHtml(wordPath)}" onclick="showErrorElement(this)">${escapeHtml(label)}</button>`;
+          } else {
+            let badgeClass = 'badge';
+            if (['processed','completed','ai_completed','completato'].includes(status)) badgeClass = 'badge badge-success';
+            else if (['uploaded','pending','processing','parsing_pdf','calling_ai','generating_word','uploading_word'].includes(status)) badgeClass = 'badge badge-secondary';
+
+            if (['uploaded','pending','processing','parsing_pdf','calling_ai','generating_word','uploading_word'].includes(status)) {
+              statusCell.innerHTML = `<span class="${badgeClass}">${escapeHtml(label)} <span class="loading loading-spinner loading-xs align-middle"></span></span>`;
+            } else {
+              statusCell.innerHTML = `<span class="${badgeClass}">${escapeHtml(label)}</span>`;
             }
-          } catch (err) {
-            const tbody = table.querySelector('tbody');
-            tbody.innerHTML = `<tr><td colspan=\"5\" class=\"text-center text-error\">Errore caricamento: ${escapeHtml(err.message)}</td></tr>`;
+          }
+
+          // aggiorna pulsante download in base a word_path
+          if (data.word_path) {
+            actionsCell.innerHTML = `<a class="btn btn-sm btn-primary" href="/processed-files/${id}/download" data-download-url="/processed-files/${id}/download">Download</a>`;
+          } else {
+            actionsCell.innerHTML = `<button class="btn btn-sm btn-ghost" disabled>Non disponibile</button>`;
           }
         }
 
-        // mostra un alert grande con il messaggio di errore
-        window.showError = function(message) {
-          if (!message) message = 'Errore non disponibile';
-          alert('Errore: ' + message);
+        // ottieni gli id visibili nella tabella
+        function getVisibleIds() {
+          const ids = [];
+          table.querySelectorAll('tbody tr[data-id]').forEach(tr => ids.push(tr.getAttribute('data-id')));
+          return ids;
         }
 
-        // apri il modal dettagliato popolando i campi (riceve l'elemento cliccato)
+        async function pollStatuses() {
+          try {
+            const ids = getVisibleIds();
+            if (!ids.length) return;
+
+            const tokenEl = document.querySelector('meta[name="csrf-token"]');
+            const csrf = tokenEl ? tokenEl.getAttribute('content') : null;
+            const res = await fetch(statusEndpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...(csrf ? {'X-CSRF-TOKEN': csrf} : {}) },
+              body: JSON.stringify({ ids })
+            });
+
+            if (!res.ok) throw new Error('Network response was not ok');
+            const payload = await res.json();
+
+            // payload expected: { "<id>": { ... }, ... } or array of objects with id property
+            if (Array.isArray(payload)) {
+              for (const item of payload) {
+                if (item && item.id !== undefined) updateRow(item.id, item);
+              }
+            } else if (payload && typeof payload === 'object') {
+              for (const [id, data] of Object.entries(payload)) {
+                updateRow(id, data || {});
+              }
+            }
+          } catch (e) {
+            console.warn('Polling error:', e.message || e);
+          }
+        }
+
+        // export global utilities used by inline HTML (modal)
         window.showErrorElement = function(el) {
           try {
             const dialog = document.getElementById('errorModal');
@@ -193,24 +247,23 @@
             if (typeof dialog.showModal === 'function') {
               dialog.showModal();
             } else {
-              // fallback semplice
               dialog.style.display = 'block';
             }
           } catch (e) {
             alert('Impossibile aprire il report dettagliato: ' + e.message);
           }
-        }
+        };
 
-        function copyToClipboard(text) {
+        window.copyToClipboard = function(text) {
           if (!text) return;
           navigator.clipboard.writeText(text).then(() => {
             alert('Copiato negli appunti');
           }).catch(() => {
             alert('Copia non riuscita');
           });
-        }
+        };
 
-        function downloadStructuredJson() {
+        window.downloadStructuredJson = function() {
           const content = document.getElementById('modalStructuredJson').innerText || '';
           if (!content) { alert('Nessun JSON disponibile'); return; }
           const blob = new Blob([content], {type: 'application/json'});
@@ -222,13 +275,11 @@
           a.click();
           a.remove();
           URL.revokeObjectURL(url);
-        }
+        };
 
-        // Polling ogni 3 secondi
-        fetchAndRender();
-        const interval = setInterval(fetchAndRender, 3000);
-
-        // se la pagina lascia il focus possiamo rallentare o fermare optional
+        // Start polling every 3 seconds
+        pollStatuses();
+        const interval = setInterval(pollStatuses, 3000);
         window.addEventListener('beforeunload', function(){ clearInterval(interval); });
       })();
     </script>
