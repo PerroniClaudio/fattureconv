@@ -96,6 +96,13 @@ class ProcessedFileController extends Controller
     {
         $pf = ProcessedFile::find($id);
         if (!$pf) return abort(404);
+        // costruiamo il nome del file di download a partire da original_filename
+        $originalName = $pf->original_filename ?: basename($pf->word_path ?? '') ?: 'document';
+        // rimuoviamo l'estensione originale e forziamo .docx
+        $baseName = pathinfo($originalName, PATHINFO_FILENAME);
+        // sanifichiamo il nome per rimuovere caratteri problematici
+        $sanitizedBase = preg_replace('/[^A-Za-z0-9_\-\. ]+/', '_', $baseName);
+        $downloadFilename = $sanitizedBase . '.docx';
 
         if (!empty($pf->word_path)) {
             try {
@@ -104,7 +111,6 @@ class ProcessedFileController extends Controller
                 if (method_exists($disk, 'readStream')) {
                     $stream = $disk->readStream($pf->word_path);
                     if ($stream === false) throw new \Exception('readStream returned false');
-                    $basename = basename($pf->word_path);
                     return response()->stream(function() use ($stream) {
                         while (!feof($stream)) {
                             echo fread($stream, 8192);
@@ -112,16 +118,16 @@ class ProcessedFileController extends Controller
                         if (is_resource($stream)) fclose($stream);
                     }, 200, [
                         'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                        'Content-Disposition' => 'attachment; filename="' . basename($pf->word_path) . '"'
+                        // forziamo il nome del download a original_filename.docx
+                        'Content-Disposition' => 'attachment; filename="' . $downloadFilename . '"'
                     ]);
                 }
 
                 // fallback: get and response
                 $contents = $disk->get($pf->word_path);
-                $basename = basename($pf->word_path);
                 return response($contents, 200)
                     ->header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-                    ->header('Content-Disposition', 'attachment; filename="' . $basename . '"');
+                    ->header('Content-Disposition', 'attachment; filename="' . $downloadFilename . '"');
             } catch (\Exception $e) {
                 Log::error('ProcessedFileController::download error', ['exception' => $e, 'id' => $id]);
                 return abort(500);
@@ -131,7 +137,8 @@ class ProcessedFileController extends Controller
         // fallback: se file locale in storage/app/processed_words
         $local = storage_path('app/processed_words/' . basename($pf->original_filename, '.pdf') . '.docx');
         if (file_exists($local)) {
-            return response()->download($local);
+            // response()->download permette di specificare il nome file visualizzato
+            return response()->download($local, $downloadFilename, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
         }
 
         return abort(404);

@@ -45,13 +45,7 @@ class ZipExportController extends Controller
         return view('zipfiles');
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        return view('zipfiles.create');
-    }
+ 
 
     /**
      * Store a newly created resource in storage.
@@ -126,6 +120,15 @@ class ZipExportController extends Controller
     {
         $zip = ZipExport::find($id);
         if (!$zip) return abort(404);
+        // Costruisci il nome del file di download
+        $nameSource = $zip->zip_filename ?: ('export_' . $zip->id);
+        // se zip_filename è vuoto, prova a costruire un nome dalle date
+        if (empty($zip->zip_filename) && !empty($zip->start_date) && !empty($zip->end_date)) {
+            $nameSource = 'export_' . $zip->start_date . '_' . $zip->end_date;
+        }
+        $baseName = pathinfo($nameSource, PATHINFO_FILENAME);
+        $sanitizedBase = preg_replace('/[^A-Za-z0-9_\-\. ]+/', '_', $baseName);
+        $downloadFilename = $sanitizedBase . '.zip';
 
         if (!empty($zip->gcs_path)) {
             try {
@@ -133,7 +136,6 @@ class ZipExportController extends Controller
                 if (method_exists($disk, 'readStream')) {
                     $stream = $disk->readStream($zip->gcs_path);
                     if ($stream === false) throw new \Exception('readStream returned false');
-                    $basename = basename($zip->gcs_path);
                     return response()->stream(function() use ($stream) {
                         while (!feof($stream)) {
                             echo fread($stream, 8192);
@@ -141,16 +143,15 @@ class ZipExportController extends Controller
                         if (is_resource($stream)) fclose($stream);
                     }, 200, [
                         'Content-Type' => 'application/zip',
-                        'Content-Disposition' => 'attachment; filename="' . $basename . '"'
+                        'Content-Disposition' => 'attachment; filename="' . $downloadFilename . '"'
                     ]);
                 }
 
                 // fallback
                 $contents = $disk->get($zip->gcs_path);
-                $basename = basename($zip->gcs_path);
                 return response($contents, 200)
                     ->header('Content-Type', 'application/zip')
-                    ->header('Content-Disposition', 'attachment; filename="' . $basename . '"');
+                    ->header('Content-Disposition', 'attachment; filename="' . $downloadFilename . '"');
             } catch (\Exception $e) {
                 Log::error('ZipExportController::download error', ['exception' => $e, 'zip_export_id' => $zip->id]);
                 return abort(500);
@@ -160,7 +161,7 @@ class ZipExportController extends Controller
         // Local fallback: check temp folder
         $local = storage_path('app/temp/' . ($zip->zip_filename ?: basename($zip->gcs_path ?? '')));
         if (file_exists($local)) {
-            return response()->download($local);
+            return response()->download($local, $downloadFilename, ['Content-Type' => 'application/zip']);
         }
 
         return abort(404);
