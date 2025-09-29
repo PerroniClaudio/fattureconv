@@ -3,7 +3,7 @@
 
     <div class="card bg-base-100 shadow-md">
         <div class="card-body">
-            <h2 class="card-title">Esporta</h2>
+            <h2 class="card-title">Esporta Excel</h2>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                 <div class="form-control">

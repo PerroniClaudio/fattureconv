@@ -17,7 +17,7 @@ class ProcessedFileController extends Controller
         // Support client-side pagination and optional status filter
         $status = $request->query('status');
         $page = max(1, (int) $request->query('page', 1));
-    $perPage = max(1, min(200, (int) $request->query('per_page', 10)));
+        $perPage = max(1, min(200, (int) $request->query('per_page', 10)));
 
         $query = ProcessedFile::query();
         if ($status) {

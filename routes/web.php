@@ -5,6 +5,7 @@ use App\Http\Controllers\UploadController;
 use App\Models\ProcessedFile;
 use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\ProcessedFileController;
+use App\Http\Controllers\ZipExportController;
 
 Route::get('/', function () {
     return view('login');
@@ -42,5 +43,13 @@ Route::get('/api/processed-files', [ProcessedFileController::class, 'index']);
 Route::post('/api/processed-files/statuses', [ProcessedFileController::class, 'statuses']);
 Route::get('/api/processed-files/in-progress', [ProcessedFileController::class, 'inProgress']);
 Route::get('/processed-files/{id}/download', [ProcessedFileController::class, 'download'])->name('processed-files.download');
+
+// Zip exports UI + API
+
+Route::get('/zip-exports', [ZipExportController::class, 'index'])->middleware('auth');
+Route::post('/api/zip-exports', [ZipExportController::class, 'store']);
+Route::get('/api/zip-exports', [ZipExportController::class, 'index']);
+Route::get('/api/zip-exports/{id}', [ZipExportController::class, 'show']);
+Route::get('/api/zip-exports/{id}/download', [ZipExportController::class, 'download']);
 
 require __DIR__.'/auth.php';
