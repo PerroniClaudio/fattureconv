@@ -1,6 +1,6 @@
 <div class="card bg-base-100 shadow-md">
   <div class="card-body">
-    <h2 class="card-title">Jobs completati</h2>
+    <h2 class="card-title">File</h2>
     <div class="overflow-x-auto">
       <table id="jobs-table" class="table w-full">
         <thead>

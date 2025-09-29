@@ -13,10 +13,12 @@
         "blade-ui-kit/blade-icons": "^1.8",
         "google/cloud-ai-platform": "^1.38",
         "laravel/framework": "^12.0",
+        "laravel/socialite": "^5.23",
         "laravel/tinker": "^2.10.1",
         "mallardduck/blade-lucide-icons": "^1.23",
         "phpoffice/phpword": "^1.4",
         "smalot/pdfparser": "^2.12",
+        "socialiteproviders/microsoft": "^4.7",
         "spatie/laravel-google-cloud-storage": "^2.3"
     },
     "require-dev": {

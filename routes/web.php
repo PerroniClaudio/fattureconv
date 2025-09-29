@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\ProcessedFileController;
 
 Route::get('/', function () {
+    return view('login');
+});
+
+Route::get('/app', function () {
     return view('welcome');
 });
 
@@ -45,3 +49,5 @@ Route::get('/generate-word', function() {
 // API per la UI: lista processed files e download
 Route::get('/api/processed-files', [ProcessedFileController::class, 'index']);
 Route::get('/processed-files/{id}/download', [ProcessedFileController::class, 'download'])->name('processed-files.download');
+
+require __DIR__.'/auth.php';
