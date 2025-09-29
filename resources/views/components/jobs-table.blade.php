@@ -1,95 +1,70 @@
 <div class="card bg-base-100 shadow-md">
   <div class="card-body">
     <h2 class="card-title">File</h2>
-    <div class="overflow-x-auto">
-      <table id="jobs-table" class="table w-full">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>File</th>
-            <th>Stato</th>
-            <th>Data</th>
-            <th>Azioni</th>
-          </tr>
-        </thead>
-        <tbody>
-          @if(isset($processedFiles) && $processedFiles->count())
-            @foreach($processedFiles as $row)
-              @php
-                $status = strtolower($row->status ?? '');
-                $labels = [
-                  'pending' => 'In coda',
-                  'uploaded' => 'Caricato',
-                  'parsing_pdf' => 'Estrazione PDF',
-                  'calling_ai' => 'Analisi dati',
-                  'ai_completed' => 'Analisi completata',
-                  'generating_word' => 'Generazione documento',
-                  'word_generated' => 'Documento generato',
-                  'uploading_word' => 'Upload documento',
-                  'completed' => 'Completato',
-                  'word_missing' => 'Documento mancante',
-                  'processing' => 'In elaborazione',
-                  'error' => 'Errore',
-                ];
-                $label = $labels[$status] ?? (\Illuminate\Support\Str::title(str_replace('_', ' ', $row->status ?? '—')));
-                $badgeClass = 'badge';
-                if (in_array($status, ['processed', 'completed', 'ai_completed', 'completato'])) {
-                  $badgeClass = 'badge badge-success';
-                } elseif (in_array($status, ['error', 'errore'])) {
-                  $badgeClass = 'badge badge-error';
-                } elseif (in_array($status, ['uploaded','pending','processing','parsing_pdf','calling_ai','generating_word','uploading_word'])) {
-                  $badgeClass = 'badge badge-secondary';
-                }
-                $date = $row->created_at ? $row->created_at->format('Y-m-d H:i:s') : '';
-                $fileName = $row->original_filename ?? $row->gcs_path ?? '—';
-              @endphp
-              <tr data-id="{{ $row->id }}">
-                <th>{{ $row->id }}</th>
-                <td>{{ $fileName }}</td>
-                <td class="status-cell">
-                  @if(in_array($status, ['error','errore']))
-                    <button class="badge badge-error" title="{{ $row->error_message ?? 'Errore non disponibile' }}" 
-                      data-error="{{ e($row->error_message ?? '') }}" 
-                      data-structured='{{ e(json_encode($row->structured_json ?? '')) }}' 
-                      data-extracted='{{ e($row->extracted_text ?? '') }}' 
-                      data-file="{{ e($fileName) }}" 
-                      data-created_at="{{ e($row->created_at) }}" 
-                      data-id="{{ $row->id }}" 
-                      data-word_path="{{ e($row->word_path ?? '') }}"
-                      onclick="showErrorElement(this)">
-                      {{ $label }}
-                    </button>
-                  @else
-                    <span class="{{ $badgeClass }}">
-                      @if(in_array($status, ['uploaded','pending','processing','parsing_pdf','calling_ai','generating_word','uploading_word']))
-                        {{ $label }} <span class="loading loading-spinner loading-xs align-middle"></span>
-                      @else
-                        {{ $label }}
-                      @endif
-                    </span>
-                  @endif
-                </td>
-                <td>{{ $date }}</td>
-                <td class="actions-cell">
-                  @if($row->word_path)
-                    <a class="btn btn-sm btn-primary" href="{{ url('/processed-files/'.$row->id.'/download') }}" data-download-url="{{ url('/processed-files/'.$row->id.'/download') }}">Download</a>
-                  @else
-                    <button class="btn btn-sm btn-ghost" disabled>Non disponibile</button>
-                  @endif
-                </td>
-              </tr>
-            @endforeach
-          @else
-            <tr><td colspan="5" class="text-center">Nessun job trovato</td></tr>
-          @endif
-        </tbody>
-      </table>
+
+    <div class="flex flex-col items-center justify-center">
+      <div role="tablist" class="tabs tabs-box">
+        <a role="tab" class="tab tab-active" data-tab="in-progress">In corso</a>
+        <a role="tab" class="tab " data-tab="completed">Completati</a>
+      </div>
     </div>
 
-    <div class="mt-4">
-      @if(isset($processedFiles))
-        {{ $processedFiles->appends(request()->query())->links() }}
-      @endif
+    @php
+      $items = isset($processedFiles) ? collect($processedFiles->items()) : collect([]);
+      $inProgressStatuses = ['pending','uploaded','processing','parsing_pdf','calling_ai','generating_word','uploading_word'];
+      $completedStatuses = ['ai_completed','word_generated','completed','processed','word_missing'];
+      $inProgress = $items->filter(function($r) use ($inProgressStatuses){ return in_array(strtolower($r->status ?? ''), $inProgressStatuses); });
+      $completed = $items->filter(function($r) use ($completedStatuses){ return in_array(strtolower($r->status ?? ''), $completedStatuses); });
+    @endphp
+
+    <div id="tab-in-progress" class="tab-panel">
+      <div class="overflow-x-auto">
+        <table id="in-progress-table" class="table w-full">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>File</th>
+              <th>Stato</th>
+              <th>Data</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="loading-row"><td colspan="5" class="text-center">Caricamento...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-completed" class="tab-panel hidden">
+      <div class="overflow-x-auto">
+        <table id="completed-table" class="table w-full">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>File</th>
+              <th>Stato</th>
+              <th>Data</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="completed-tbody">
+            {{-- populated by client-side JS --}}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-4 flex items-center justify-between">
+        <div>
+          <button id="completed-prev" class="btn btn-sm btn-outline" disabled>
+            <x-lucide-arrow-left class="inline-block w-4 h-4 mr-1" />
+          </button>
+          <button id="completed-next" class="btn btn-sm btn-outline ml-2" disabled>
+            <x-lucide-arrow-right class="inline-block w-4 h-4 mr-1" />
+          </button>
+        </div>
+        <div class="text-sm text-muted" id="completed-pagination-info"></div>
+      </div>
     </div>
     <!-- Modal dettagli errori -->
     <dialog id="errorModal" class="modal">
@@ -131,8 +106,22 @@
 
     <script>
       (function(){
-        const statusEndpoint = '/api/processed-files/statuses'; // POST { ids: [..] }
-        const table = document.getElementById('jobs-table');
+        const statusesEndpoint = '/api/processed-files/statuses'; // POST { ids: [..] }
+        const inProgressEndpoint = '/api/processed-files/in-progress'; // GET
+        const processedIndexEndpoint = '/api/processed-files'; // GET with ?status=...&page=&per_page=
+        const inProgressTable = document.getElementById('in-progress-table');
+        const completedTbody = document.getElementById('completed-tbody');
+        const completedPrev = document.getElementById('completed-prev');
+        const completedNext = document.getElementById('completed-next');
+        const completedInfo = document.getElementById('completed-pagination-info');
+        const completedTab = document.querySelector('[data-tab="completed"]');
+        const inProgressTab = document.querySelector('[data-tab="in-progress"]');
+        const tabInProgressPanel = document.getElementById('tab-in-progress');
+        const tabCompletedPanel = document.getElementById('tab-completed');
+
+  let completedPage = 1;
+  let completedPerPage = 10;
+        let completedLastPage = 1;
 
         function escapeHtml(unsafe) {
           if (unsafe === null || unsafe === undefined) return '';
@@ -144,9 +133,52 @@
             .replace(/'/g, '&#039;');
         }
 
+        // format ISO date to d/m/Y H:i (e.g. 29/09/2025 14:05)
+        function formatDate(iso) {
+          if (!iso) return '';
+          // try to parse as Date
+          const d = new Date(iso);
+          if (isNaN(d)) return escapeHtml(String(iso));
+          const pad = (n) => String(n).padStart(2, '0');
+          const day = pad(d.getDate());
+          const month = pad(d.getMonth() + 1);
+          const year = d.getFullYear();
+          const hours = pad(d.getHours());
+          const minutes = pad(d.getMinutes());
+          return `${day}/${month}/${year} ${hours}:${minutes}`;
+        }
+
+        // render a row HTML for an in-progress item and insert if missing
+        function renderRow(item) {
+          const tbody = inProgressTable.querySelector('tbody');
+          let tr = inProgressTable.querySelector(`tr[data-id="${item.id}"]`);
+          if (tr) return tr; // already present
+
+          const fileName = escapeHtml(item.original_filename || item.gcs_path || '—');
+          const date = formatDate(item.created_at || '');
+          const status = (item.status || '').toLowerCase();
+
+          const labels = {
+            pending: 'In coda', uploaded: 'Caricato', parsing_pdf: 'Estrazione PDF', calling_ai: 'Analisi dati', ai_completed: 'Analisi completata', generating_word: 'Generazione documento', word_generated: 'Documento generato', uploading_word: 'Upload documento', completed: 'Completato', word_missing: 'Documento mancante', processing: 'In elaborazione', error: 'Errore'
+          };
+          const label = escapeHtml(labels[status] || (item.status || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—');
+
+          tr = document.createElement('tr');
+          tr.setAttribute('data-id', item.id);
+          tr.innerHTML = `
+            <th>${escapeHtml(String(item.id))}</th>
+            <td>${fileName}</td>
+            <td class="status-cell">${label}</td>
+            <td>${date}</td>
+            <td class="actions-cell"><button class="btn btn-sm btn-ghost" disabled>Non disponibile</button></td>
+          `;
+          tbody.appendChild(tr);
+          return tr;
+        }
+
         // aggiorna una riga dato l'id e i dati di risposta
         function updateRow(id, data) {
-          const tr = table.querySelector(`tr[data-id="${id}"]`);
+          const tr = inProgressTable.querySelector(`tr[data-id="${id}"]`);
           if (!tr) return;
 
           const statusCell = tr.querySelector('.status-cell');
@@ -188,41 +220,139 @@
           }
         }
 
-        // ottieni gli id visibili nella tabella
-        function getVisibleIds() {
-          const ids = [];
-          table.querySelectorAll('tbody tr[data-id]').forEach(tr => ids.push(tr.getAttribute('data-id')));
-          return ids;
+        // Completed: render a completed row
+        function renderCompletedRow(row) {
+          const tr = document.createElement('tr');
+          const fileName = escapeHtml(row.original_filename || row.gcs_path || '—');
+          const date = formatDate(row.created_at || '');
+          const status = (row.status || '').toLowerCase();
+          const labels = { pending: 'In coda', uploaded: 'Caricato', parsing_pdf: 'Estrazione PDF', calling_ai: 'Analisi dati', ai_completed: 'Analisi completata', generating_word: 'Generazione documento', word_generated: 'Documento generato', uploading_word: 'Upload documento', completed: 'Completato', word_missing: 'Documento mancante', processing: 'In elaborazione', error: 'Errore' };
+          const label = escapeHtml(labels[status] || (row.status || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || '—');
+
+          let badgeClass = 'badge';
+          if (['processed','completed','ai_completed','completato'].includes(status)) badgeClass = 'badge badge-success';
+          else if (['error','errore'].includes(status)) badgeClass = 'badge badge-error';
+          else if (['uploaded','pending','processing','parsing_pdf','calling_ai','generating_word','uploading_word'].includes(status)) badgeClass = 'badge badge-secondary';
+
+          const statusHtml = (badgeClass === 'badge badge-error')
+            ? `<button class="badge badge-error" title="${escapeHtml(row.error_message || '')}" data-error="${escapeHtml(row.error_message || '')}" data-structured='${escapeHtml(JSON.stringify(row.structured_json || ''))}' data-extracted='${escapeHtml(row.extracted_text || '')}' data-file="${escapeHtml(fileName)}" data-created_at="${escapeHtml(row.created_at || '')}" data-id="${escapeHtml(row.id)}" data-word_path="${escapeHtml(row.word_path || '')}" onclick="showErrorElement(this)">${escapeHtml(label)}</button>`
+            : `<span class="${badgeClass}">${escapeHtml(label)}</span>`;
+
+          const actions = row.word_path ? `<a class="btn btn-sm btn-primary" href="/processed-files/${row.id}/download" data-download-url="/processed-files/${row.id}/download">Download</a>` : `<button class="btn btn-sm btn-ghost" disabled>Non disponibile</button>`;
+
+          tr.innerHTML = `<th>${escapeHtml(String(row.id))}</th><td>${fileName}</td><td class="status-cell">${statusHtml}</td><td>${date}</td><td class="actions-cell">${actions}</td>`;
+          completedTbody.appendChild(tr);
         }
 
-        async function pollStatuses() {
+        async function fetchCompletedPage(page = 1) {
           try {
-            const ids = getVisibleIds();
-            if (!ids.length) return;
+            completedTbody.innerHTML = '<tr><td colspan="5" class="text-center">Caricamento...</td></tr>';
+            const res = await fetch(`${processedIndexEndpoint}?status=completed&page=${page}&per_page=${completedPerPage}`, { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) throw new Error('Network response not ok');
+            const json = await res.json();
+            const items = json.items || [];
+            const meta = json.meta || { total: 0, page: 1, per_page: completedPerPage, last_page: 1 };
+            completedPage = meta.page || 1;
+            completedPerPage = meta.per_page || completedPerPage;
+            completedLastPage = meta.last_page || 1;
 
-            const tokenEl = document.querySelector('meta[name="csrf-token"]');
-            const csrf = tokenEl ? tokenEl.getAttribute('content') : null;
-            const res = await fetch(statusEndpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...(csrf ? {'X-CSRF-TOKEN': csrf} : {}) },
-              body: JSON.stringify({ ids })
-            });
-
-            if (!res.ok) throw new Error('Network response was not ok');
-            const payload = await res.json();
-
-            // payload expected: { "<id>": { ... }, ... } or array of objects with id property
-            if (Array.isArray(payload)) {
-              for (const item of payload) {
-                if (item && item.id !== undefined) updateRow(item.id, item);
-              }
-            } else if (payload && typeof payload === 'object') {
-              for (const [id, data] of Object.entries(payload)) {
-                updateRow(id, data || {});
-              }
+            completedTbody.innerHTML = '';
+            if (items.length === 0) {
+              completedTbody.innerHTML = '<tr><td colspan="5" class="text-center">Nessun job completato nella pagina corrente</td></tr>';
+            } else {
+              for (const row of items) renderCompletedRow(row);
             }
+
+            // update controls
+            completedPrev.disabled = completedPage <= 1;
+            completedNext.disabled = completedPage >= completedLastPage;
+            completedInfo.innerText = `Pagina ${completedPage} di ${completedLastPage} — Totale ${meta.total}`;
+            return json;
           } catch (e) {
-            console.warn('Polling error:', e.message || e);
+            completedTbody.innerHTML = '<tr><td colspan="5" class="text-center text-error">Errore nel caricamento</td></tr>';
+            console.warn('fetchCompletedPage error', e);
+            return null;
+          }
+        }
+
+        completedPrev.addEventListener('click', () => { if (completedPage > 1) fetchCompletedPage(completedPage - 1); });
+        completedNext.addEventListener('click', () => { if (completedPage < completedLastPage) fetchCompletedPage(completedPage + 1); });
+
+        // Switch tabs
+        // skipFetch = true prevents setActiveTab from calling fetchCompletedPage again (used when we already fetched)
+        function setActiveTab(tabName, skipFetch = false) {
+          if (tabName === 'in-progress') {
+            inProgressTab.classList.add('tab-active');
+            completedTab.classList.remove('tab-active');
+            tabInProgressPanel.classList.remove('hidden');
+            tabCompletedPanel.classList.add('hidden');
+          } else {
+            completedTab.classList.add('tab-active');
+            inProgressTab.classList.remove('tab-active');
+            tabCompletedPanel.classList.remove('hidden');
+            tabInProgressPanel.classList.add('hidden');
+            // when completed tab is shown, ensure first page is loaded (unless caller already fetched)
+            if (!skipFetch) fetchCompletedPage(completedPage);
+          }
+        }
+
+        inProgressTab.addEventListener('click', () => setActiveTab('in-progress'));
+        completedTab.addEventListener('click', () => setActiveTab('completed'));
+
+        // Poll the in-progress endpoint and update/replace rows as needed
+        async function pollInProgress() {
+          try {
+            // only poll if the in-progress tab is visible
+            if (tabInProgressPanel.classList.contains('hidden')) return;
+
+            const res = await fetch(inProgressEndpoint, { method: 'GET', headers: { 'Accept': 'application/json' } });
+            if (!res.ok) throw new Error('Network response was not ok');
+            const payload = await res.json(); // array of items
+
+            if (!Array.isArray(payload)) return;
+            const tbody = inProgressTable.querySelector('tbody');
+
+            // If empty result, show friendly message instead of leaving 'Caricamento...'
+            if (payload.length === 0) {
+              // try to switch automatically to Completed tab if there are completed items
+              try {
+                const json = await fetchCompletedPage(1);
+                const items = (json && Array.isArray(json.items)) ? json.items : [];
+                if (items.length > 0) {
+                  // switch to completed without triggering an extra fetch (we already fetched page 1)
+                  setActiveTab('completed', true);
+                  return;
+                }
+              } catch (e) {
+                // ignore errors and fall back to showing 'Nessun job in corso'
+              }
+
+              tbody.innerHTML = '<tr class="no-jobs-row"><td colspan="5" class="text-center">Nessun job in corso</td></tr>';
+              return;
+            }
+
+            // remove initial loading row if present
+            const loadingRow = tbody.querySelector('.loading-row');
+            if (loadingRow) loadingRow.remove();
+            const noJobsRow = tbody.querySelector('.no-jobs-row');
+            if (noJobsRow) noJobsRow.remove();
+
+            // Build a map of received items and render/update rows
+            const received = {};
+            for (const item of payload) {
+              received[item.id] = item;
+              // render row if missing
+              renderRow(item);
+              updateRow(item.id, item);
+            }
+
+            // Remove rows that are no longer in the in-progress list
+            inProgressTable.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+              const id = tr.getAttribute('data-id');
+              if (!received[id]) tr.remove();
+            });
+          } catch (e) {
+            console.warn('Polling in-progress error:', e.message || e);
           }
         }
 
@@ -239,7 +369,7 @@
             const extracted = el.getAttribute('data-extracted') || '';
 
             document.getElementById('modalFileName').innerText = file || id;
-            document.getElementById('modalMeta').innerText = `ID: ${id} • Creato: ${createdAt} • Word: ${wordPath}`;
+            document.getElementById('modalMeta').innerText = `ID: ${id} • Creato: ${formatDate(createdAt)} • Word: ${wordPath}`;
             document.getElementById('modalErrorMessage').innerText = error;
             document.getElementById('modalStructuredJson').innerText = structured || '';
             document.getElementById('modalExtractedText').value = extracted || '';
@@ -277,10 +407,12 @@
           URL.revokeObjectURL(url);
         };
 
-        // Start polling every 3 seconds
-        pollStatuses();
-        const interval = setInterval(pollStatuses, 3000);
+        // Start polling every 3 seconds (only for in-progress)
+        pollInProgress();
+        const interval = setInterval(pollInProgress, 3000);
         window.addEventListener('beforeunload', function(){ clearInterval(interval); });
+
+        // also pre-load first completed page lazily if user switches to that tab
       })();
     </script>
   </div>

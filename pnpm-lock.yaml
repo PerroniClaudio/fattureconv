@@ -7,6 +7,13 @@ settings:
 importers:
 
   .:
+    dependencies:
+      filepond:
+        specifier: ^4.32.9
+        version: 4.32.9
+      filepond-plugin-file-validate-type:
+        specifier: ^1.2.9
+        version: 1.2.9(filepond@4.32.9)
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -512,6 +519,14 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  filepond-plugin-file-validate-type@1.2.9:
+    resolution: {integrity: sha512-Tzv07aNdZvjUXDRA3XL16QMEvh6llDrXlcZ6W0eTHQ+taHaVg/JKJTFs/AViO+6ZcpPCcQStbhYEL2HoS+vldw==}
+    peerDependencies:
+      filepond: '>=1.x <5.x'
+
+  filepond@4.32.9:
+    resolution: {integrity: sha512-MnNnRrTS1M/6C/puIs5dNkbP1RMGANFxnygwdweNXAxyeCS4S68UM4CdvmyF7UrZB93Fhop7Bea2Ib6rkrYHUw==}
 
   follow-redirects@1.15.11:
     resolution: {integrity: sha512-deG2P0JfjrTxl50XGCDyfI97ZGVCxIpfKYmfyrQ54n5FO/0gfIES8C/Psl6kWVDolizcaaxZJnTS0QSMxvnsBQ==}
@@ -1178,6 +1193,12 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:
       picomatch: 4.0.3
+
+  filepond-plugin-file-validate-type@1.2.9(filepond@4.32.9):
+    dependencies:
+      filepond: 4.32.9
+
+  filepond@4.32.9: {}
 
   follow-redirects@1.15.11: {}
 

@@ -5,12 +5,29 @@
     <form id="upload-form" class="space-y-4" action="{{ url('/upload') }}" method="POST" enctype="multipart/form-data">
       @csrf
       <div>
-        <input type="file" name="pdf" accept="application/pdf" id="pdf-file" class="file-input file-input-bordered w-full" required />
-      </div>
-      <div class="flex items-center gap-2">
-        <button class="btn btn-primary" type="submit">Carica</button>
-        <button class="btn btn-ghost" type="reset">Reset</button>
+        <!-- Allow multiple PDF files to be selected -->
+        <input type="file" name="pdf[]" accept="application/pdf" id="pdf-file" class="" multiple required />
+        <!-- FilePond will upload files async; we collect processed IDs here -->
+        <div id="processed-ids-container"></div>
+        <input type="hidden" name="processed_ids" id="processed-ids" />
       </div>
     </form>
+    <script>
+      // collect FilePond server response ids
+      document.addEventListener('DOMContentLoaded', function () {
+        const pond = FilePond.find(document.querySelector('#pdf-file'));
+        if (!pond) return;
+
+        const ids = [];
+        pond.on('processfile', (error, file) => {
+          if (!error) {
+            // server returned the processed id as responseText
+            const serverId = file.serverId;
+            ids.push(serverId);
+            document.getElementById('processed-ids').value = ids.join(',');
+          }
+        });
+      });
+    </script>
   </div>
 </div>

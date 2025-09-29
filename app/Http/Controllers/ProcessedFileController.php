@@ -14,8 +14,31 @@ class ProcessedFileController extends Controller
      */
     public function index(Request $request)
     {
-        $files = ProcessedFile::orderBy('created_at', 'desc')->limit(50)->get();
-        return response()->json($files);
+        // Support client-side pagination and optional status filter
+        $status = $request->query('status');
+        $page = max(1, (int) $request->query('page', 1));
+    $perPage = max(1, min(200, (int) $request->query('per_page', 10)));
+
+        $query = ProcessedFile::query();
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $total = $query->count();
+        $items = $query->orderBy('created_at', 'desc')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get();
+
+        return response()->json([
+            'items' => $items,
+            'meta' => [
+                'total' => $total,
+                'page' => $page,
+                'per_page' => $perPage,
+                'last_page' => (int) ceil($total / $perPage),
+            ],
+        ]);
     }
 
     /**
@@ -47,6 +70,23 @@ class ProcessedFileController extends Controller
         }
 
         return response()->json($payload, 200);
+    }
+
+    /**
+     * Return a lightweight list of in-progress files for polling.
+     * Optional query param: limit (default 50)
+     */
+    public function inProgress(Request $request)
+    {
+        $limit = (int) $request->query('limit', 50);
+        $inProgressStatuses = ['pending','uploaded','processing','parsing_pdf','calling_ai','generating_word','uploading_word'];
+
+        $files = ProcessedFile::whereIn('status', $inProgressStatuses)
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get(['id','status','original_filename','gcs_path','created_at','word_path','error_message']);
+
+        return response()->json($files, 200);
     }
 
     /**

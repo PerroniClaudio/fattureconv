@@ -11,12 +11,15 @@ Route::get('/', function () {
 });
 
 Route::get('/app', function () {
-    $processedFiles = ProcessedFile::orderBy('created_at', 'desc')->paginate(15);
+    $processedFiles = ProcessedFile::orderBy('created_at', 'desc')->paginate(10);
     return view('welcome', compact('processedFiles'));
-});
+})->middleware('auth');
 
 // Endpoint per upload PDF (multipart form POST)
 Route::post('/upload', [UploadController::class, 'uploadLocal'])->name('upload');
+
+// Endpoint compatibile FilePond (server.process) – riceve un singolo file per richiesta
+Route::post('/upload/process', [UploadController::class, 'processFilePond'])->name('upload.process');
 
 //Export 
 Route::get('/export', function() {
@@ -37,6 +40,7 @@ Route::get('/export', function() {
 // API per la UI: lista processed files e download
 Route::get('/api/processed-files', [ProcessedFileController::class, 'index']);
 Route::post('/api/processed-files/statuses', [ProcessedFileController::class, 'statuses']);
+Route::get('/api/processed-files/in-progress', [ProcessedFileController::class, 'inProgress']);
 Route::get('/processed-files/{id}/download', [ProcessedFileController::class, 'download'])->name('processed-files.download');
 
 require __DIR__.'/auth.php';
