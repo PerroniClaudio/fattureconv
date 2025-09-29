@@ -1,9 +1,27 @@
 // jobs-table.js - ES module
 
+
+/**
+ * Endpoint per ottenere gli status dei file processati
+ * @type {string}
+ */
 const statusesEndpoint = '/api/processed-files/statuses';
+/**
+ * Endpoint per ottenere i file in corso
+ * @type {string}
+ */
 const inProgressEndpoint = '/api/processed-files/in-progress';
+/**
+ * Endpoint per la lista dei file processati
+ * @type {string}
+ */
 const processedIndexEndpoint = '/api/processed-files';
 
+/**
+ * Esegue l'escape dei caratteri HTML per prevenire XSS
+ * @param {string} unsafe - Stringa da sanificare
+ * @returns {string} Stringa sanificata
+ */
 export function escapeHtml(unsafe) {
   if (unsafe === null || unsafe === undefined) return '';
   return String(unsafe)
@@ -14,6 +32,11 @@ export function escapeHtml(unsafe) {
     .replace(/'/g, '&#039;');
 }
 
+/**
+ * Format ISO date in formato italiano d/m/Y H:i
+ * @param {string} iso - Data in formato ISO
+ * @returns {string} Data formattata
+ */
 export function formatDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -27,6 +50,12 @@ export function formatDate(iso) {
   return `${day}/${month}/${year} ${hours}:${minutes}`;
 }
 
+/**
+ * Renderizza una riga della tabella "in corso" per un job
+ * @param {Object} item - Oggetto job
+ * @param {HTMLElement} inProgressTable - Tabella HTML
+ * @returns {HTMLElement} La riga creata
+ */
 export function renderRow(item, inProgressTable) {
   const tbody = inProgressTable.querySelector('tbody');
   let tr = inProgressTable.querySelector(`tr[data-id="${item.id}"]`);
@@ -51,6 +80,12 @@ export function renderRow(item, inProgressTable) {
   return tr;
 }
 
+/**
+ * Aggiorna una riga della tabella "in corso" con nuovi dati
+ * @param {number|string} id - ID del job
+ * @param {Object} data - Dati aggiornati del job
+ * @param {HTMLElement} inProgressTable - Tabella HTML
+ */
 export function updateRow(id, data, inProgressTable) {
   const tr = inProgressTable.querySelector(`tr[data-id="${id}"]`);
   if (!tr) return;
@@ -86,6 +121,11 @@ export function updateRow(id, data, inProgressTable) {
   }
 }
 
+/**
+ * Renderizza una riga della tabella "completati" per un job
+ * @param {Object} row - Oggetto job
+ * @param {HTMLElement} completedTbody - tbody della tabella completati
+ */
 export function renderCompletedRow(row, completedTbody) {
   const tr = document.createElement('tr');
   const fileName = escapeHtml(row.original_filename || row.gcs_path || '—');
@@ -105,6 +145,10 @@ export function renderCompletedRow(row, completedTbody) {
   completedTbody.appendChild(tr);
 }
 
+/**
+ * Mostra il modal di errore dettagliato per un job
+ * @param {HTMLElement} el - Elemento HTML che contiene i dati errore
+ */
 export function showErrorElement(el) {
   try {
     const dialog = document.getElementById('errorModal');
@@ -130,6 +174,10 @@ export function showErrorElement(el) {
   }
 }
 
+/**
+ * Copia il testo negli appunti
+ * @param {string} text - Testo da copiare
+ */
 export function copyToClipboard(text) {
   if (!text) return;
   navigator.clipboard.writeText(text).then(() => {
@@ -139,6 +187,9 @@ export function copyToClipboard(text) {
   });
 }
 
+/**
+ * Scarica il JSON strutturato dal modal errore
+ */
 export function downloadStructuredJson() {
   const content = document.getElementById('modalStructuredJson').innerText || '';
   if (!content) { alert('Nessun JSON disponibile'); return; }
@@ -153,6 +204,10 @@ export function downloadStructuredJson() {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Inizializza la tabella jobs: polling, tab switching, rendering
+ * Da chiamare una sola volta dopo il caricamento del DOM
+ */
 export function initJobsTable() {
   const inProgressTable = document.getElementById('in-progress-table');
   const completedTbody = document.getElementById('completed-tbody');
@@ -218,6 +273,7 @@ export function initJobsTable() {
   completedTab.addEventListener('click', () => setActiveTab('completed'));
 
   async function pollInProgress() {
+    // Lo switch automatico alla tab "completati" avviene solo al primo load
     try {
       if (tabInProgressPanel.classList.contains('hidden')) return;
       const res = await fetch(inProgressEndpoint, { method: 'GET', headers: { 'Accept': 'application/json' } });
@@ -225,18 +281,24 @@ export function initJobsTable() {
       const payload = await res.json();
       if (!Array.isArray(payload)) return;
       const tbody = inProgressTable.querySelector('tbody');
+      if (typeof pollInProgress.isFirst === 'undefined') pollInProgress.isFirst = true;
       if (payload.length === 0) {
-        try {
-          const json = await fetchCompletedPage(1);
-          const items = (json && Array.isArray(json.items)) ? json.items : [];
-          if (items.length > 0) {
-            setActiveTab('completed', true);
-            return;
-          }
-        } catch (e) {}
-        tbody.innerHTML = '<tr class=\"no-jobs-row\"><td colspan=\"5\" class=\"text-center\">Nessun job in corso</td></tr>';
+        if (pollInProgress.isFirst) {
+          try {
+            const json = await fetchCompletedPage(1);
+            const items = (json && Array.isArray(json.items)) ? json.items : [];
+            if (items.length > 0) {
+              setActiveTab('completed', true);
+              pollInProgress.isFirst = false;
+              return;
+            }
+          } catch (e) {}
+        }
+        tbody.innerHTML = '<tr class="no-jobs-row"><td colspan="5" class="text-center">Nessun job in corso</td></tr>';
+        pollInProgress.isFirst = false;
         return;
       }
+      pollInProgress.isFirst = false;
       const loadingRow = tbody.querySelector('.loading-row');
       if (loadingRow) loadingRow.remove();
       const noJobsRow = tbody.querySelector('.no-jobs-row');
