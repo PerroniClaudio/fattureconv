@@ -1,4 +1,5 @@
 import './bootstrap';
+import { initJobsTable } from './jobs-table';
 
 // FilePond imports
 import * as FilePond from 'filepond';
@@ -9,6 +10,7 @@ FilePond.registerPlugin(FilePondPluginFileValidateType);
 
 // Auto-initialize any file input with FilePond when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+	// FilePond
 	const input = document.querySelector('#pdf-file');
 	if (input) {
 		FilePond.create(input, {
@@ -24,11 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
 						'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
 					},
 					withCredentials: false,
-					// onload should return the file id so FilePond can reference it
 					onload: (response) => response,
 				},
 				revert: null,
 			},
 		});
 	}
+	// Jobs Table
+	initJobsTable();
 });
