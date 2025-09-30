@@ -44,14 +44,15 @@ class GenerateZipFile implements ShouldQueue
             // 2. Recupera i file ProcessedFile con created_at tra start_date e end_date e status 'completed' e li copia nella cartella temporanea
             $this->zipExport->update(['status' => 'downloading_files']);
 
-            $files_to_zip = ProcessedFile::whereBetween('created_at', [$this->zipExport->start_date, $this->zipExport->end_date])
+            $files_to_zip = ProcessedFile::where('created_at', '>=', $this->zipExport->start_date)
+                ->where('created_at', '<=', $this->zipExport->end_date)
                 ->where('status', 'completed')
                 ->get();
 
             // Scarica e copia i file nella cartella temporanea
             foreach ($files_to_zip as $processedFile) {
                 if ($processedFile->word_path) {
-                    $fileName = basename($processedFile->word_path);
+                    $fileName = basename($processedFile->original_filename);
                     $localPath = $tempDir . '/' . $fileName;
                     
                     // Scarica il file da GCS
