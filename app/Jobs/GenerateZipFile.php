@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\ProcessedFile;
 use App\Models\ZipExport;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -45,7 +46,7 @@ class GenerateZipFile implements ShouldQueue
             $this->zipExport->update(['status' => 'downloading_files']);
 
             $files_to_zip = ProcessedFile::where('created_at', '>=', $this->zipExport->start_date)
-                ->where('created_at', '<=', $this->zipExport->end_date)
+                ->where('created_at', '<', Carbon::parse($this->zipExport->end_date)->addDay())
                 ->where('status', 'completed')
                 ->get();
 

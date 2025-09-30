@@ -32,7 +32,7 @@ class FattureExport implements FromArray
         ];
 
         $data = ProcessedFile::where('created_at', '>=', $this->start_date)
-            ->where('created_at', '<=', $this->end_date)
+            ->where('created_at', '<', Carbon::parse($this->end_date)->addDay())
             ->whereNotNull('structured_json')
             ->get()
             ->map(function ($file) {
