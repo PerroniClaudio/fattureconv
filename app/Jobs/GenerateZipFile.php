@@ -48,6 +48,7 @@ class GenerateZipFile implements ShouldQueue
             $files_to_zip = ProcessedFile::where('created_at', '>=', $this->zipExport->start_date)
                 ->where('created_at', '<', Carbon::parse($this->zipExport->end_date)->addDay())
                 ->where('status', 'completed')
+                ->whereNull('deleted_at') // Esclude esplicitamente i file con soft delete
                 ->get();
 
             // Scarica e copia i file nella cartella temporanea

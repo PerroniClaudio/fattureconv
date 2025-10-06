@@ -70,7 +70,8 @@ Route::middleware('auth')->group(function () {
     
     // Dashboard
     Route::get('/app', function () {
-        $processedFiles = ProcessedFile::orderBy('created_at', 'desc')
+        $processedFiles = ProcessedFile::whereNull('deleted_at')
+            ->orderBy('created_at', 'desc')
             ->paginate(10);
         return view('welcome', compact('processedFiles'));
     })->name('app.dashboard');
@@ -128,6 +129,9 @@ Route::prefix('api')->middleware('auth')->group(function () {
         
         Route::get('/in-progress', [ProcessedFileController::class, 'inProgress'])
             ->name('api.processed-files.in-progress');
+        
+        Route::delete('/{id}', [ProcessedFileController::class, 'destroy'])
+            ->name('api.processed-files.destroy');
     });
 
     // Zip Exports API

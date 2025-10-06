@@ -19,6 +19,7 @@ class ProcessedFileController extends Controller
         $page = max(1, (int) $request->query('page', 1));
         $perPage = max(1, min(200, (int) $request->query('per_page', 10)));
 
+        // I file con soft delete vengono automaticamente esclusi dal trait SoftDeletes
         $query = ProcessedFile::query();
         if ($status) {
             $query->where('status', $status);
@@ -51,6 +52,7 @@ class ProcessedFileController extends Controller
             return response()->json([], 200);
         }
 
+        // I file con soft delete vengono automaticamente esclusi dal trait SoftDeletes
         $files = ProcessedFile::whereIn('id', $ids)->get(['id','status','word_path','error_message','structured_json','extracted_text','original_filename','gcs_path','created_at']);
 
         // return as object keyed by id for easier client updates
@@ -81,6 +83,7 @@ class ProcessedFileController extends Controller
         $limit = (int) $request->query('limit', 50);
         $inProgressStatuses = ['pending','uploaded','processing','parsing_pdf','calling_ai','generating_word','uploading_word'];
 
+        // I file con soft delete vengono automaticamente esclusi dal trait SoftDeletes
         $files = ProcessedFile::whereIn('status', $inProgressStatuses)
             ->orderBy('created_at', 'desc')
             ->limit($limit)
@@ -142,5 +145,36 @@ class ProcessedFileController extends Controller
         }
 
         return abort(404);
+    }
+
+    /**
+     * Elimina (soft delete) un ProcessedFile
+     */
+    public function destroy($id)
+    {
+        $processedFile = ProcessedFile::find($id);
+        
+        if (!$processedFile) {
+            return response()->json(['error' => 'File non trovato'], 404);
+        }
+
+        try {
+            $processedFile->delete();
+            Log::info('ProcessedFile eliminato', ['id' => $id, 'filename' => $processedFile->original_filename]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'File eliminato con successo'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Errore durante eliminazione ProcessedFile', [
+                'id' => $id,
+                'exception' => $e->getMessage()
+            ]);
+            
+            return response()->json([
+                'error' => 'Errore durante l\'eliminazione del file'
+            ], 500);
+        }
     }
 }
