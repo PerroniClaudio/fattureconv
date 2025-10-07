@@ -253,7 +253,7 @@ class DocumentController extends Controller
             ];
 
             foreach ($map as $key => $value) {
-                $tp->setValue($key, $value);
+                $tp->setValue($key, htmlspecialchars($value));
             }
             
             // Se ci sono items, normalizza i nomi dei campi e poi clona la riga contenente ${item_descrizione} e popola i valori
@@ -321,6 +321,7 @@ class DocumentController extends Controller
             throw $e;
         }
     }
+
 
     /**
      * Format date string to dd/mm/YYYY or return empty string on failure

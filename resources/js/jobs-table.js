@@ -200,6 +200,10 @@ export function updateRow(id, data, inProgressTable) {
  */
 export function renderCompletedRow(row, completedTbody) {
     const tr = document.createElement("tr");
+    // Imposta l'attributo data-id così la rimozione della riga funziona correttamente
+    if (typeof row.id !== "undefined" && row.id !== null) {
+        tr.setAttribute("data-id", String(row.id));
+    }
     const fileName = escapeHtml(row.original_filename || row.gcs_path || "—");
     const date = formatDate(row.created_at || "");
     const status = (row.status || "").toLowerCase();

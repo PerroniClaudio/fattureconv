@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DocumentController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UploadController;
 use App\Http\Controllers\ProcessedFileController;
@@ -59,6 +60,7 @@ Route::get('/', function () {
     }
     return view('login');
 })->name('login.page');
+
 
 /*
 |--------------------------------------------------------------------------
