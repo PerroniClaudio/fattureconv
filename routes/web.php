@@ -78,6 +78,11 @@ Route::middleware('auth')->group(function () {
         return view('welcome', compact('processedFiles'));
     })->name('app.dashboard');
 
+    // Exports page
+    Route::get('/exports', function () {
+        return view('exports');
+    })->name('exports.page');
+
     // Upload
     Route::post('/upload', [UploadController::class, 'uploadLocal'])
         ->name('upload');

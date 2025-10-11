@@ -237,8 +237,15 @@ class DocumentController extends Controller
 
             // Carica template con TemplateProcessor
             $tp = new TemplateProcessor($tmpTemplate);
+            $iva_italia_22 = isset($ai['importo_netto']) && is_numeric($ai['importo_netto']) ? round($ai['importo_netto'] * 0.22, 2) : 0;
 
             // mapping placeholders -> ai fields (senza ${})
+            // Helper per formattare numeri come valuta con la virgola decimale
+            $fmtMoney = function($value) {
+                if (!is_numeric($value)) return $value;
+                return number_format($value, 2, ',', '');
+            };
+
             $map = [
                 'account_holder'   => $ai['account_holder'] ?? $ai['fornitore'] ?? 'N/A',
                 'address'          => $ai['address'] ?? $ai['indirizzo'] ?? 'N/A',
@@ -246,10 +253,15 @@ class DocumentController extends Controller
                 'data_emissione'   => $this->formatDate($ai['date'] ?? ($ai['data_emissione'] ?? '')),
                 'data_fattura'     => $this->formatDate($ai['data_emissione'] ?? ($ai['date'] ?? '')),
                 'numero_fattura'   => $ai['numero_fattura'] ?? ($ai['invoice_number'] ?? 'N/A'),
-                'importo_netto'    => $ai['importo_netto'] ?? ($ai['amount_net'] ?? 'N/A'),
+                'importo_netto'    => $fmtMoney($ai['importo_netto'] ?? ($ai['amount_net'] ?? 'N/A')) . (isset($ai['valuta']) ? ' ' . $ai['valuta'] : ''),
                 'iva_percentuale'  => $ai['iva_percentuale'] ?? ($ai['vat_percent'] ?? 'N/A'),
-                'iva_importo'      => $ai['iva_importo'] ?? ($ai['importo_iva'] ?? 'N/A'),
+                'iva_importo'      => $fmtMoney($ai['iva_importo'] ?? ($ai['importo_iva'] ?? 'N/A')) . (isset($ai['valuta']) ? ' ' . $ai['valuta'] : ''),
                 'totale_dovuto'    => $ai['totale_dovuto'] ?? ($ai['total_due'] ?? ($ai['totale'] ?? 'N/A')),
+                'iva_italia_22'    => $fmtMoney($iva_italia_22) . (isset($ai['valuta']) ? ' ' . $ai['valuta'] : ''),
+                'totale_imponibile_italia' => $fmtMoney(
+                    ((isset($ai['importo_netto']) && is_numeric($ai['importo_netto']) ? $ai['importo_netto'] : 0)
+                    + (is_numeric($iva_italia_22) ? $iva_italia_22 : 0))
+                ) . (isset($ai['valuta']) ? ' ' . $ai['valuta'] : ''),
             ];
 
             foreach ($map as $key => $value) {

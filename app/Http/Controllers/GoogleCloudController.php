@@ -57,7 +57,7 @@ class GoogleCloudController extends Controller
 
     public function callVertexAI(string $testo, ?string $prompt = null, string $model = 'gemini-2.5-flash'): array
     {
-        $projectId = env('GOOGLE_CLOUD_PROJECT_ID', 'tuo-progetto-default');
+        $projectId = config('google.key_file.project_id', 'tuo-progetto-default');
         $location = env('GOOGLE_CLOUD_LOCATION', 'eu-west8');
 
         // Costruisci il resource name del modello publisher (google) + modello richiesto
@@ -92,21 +92,18 @@ class GoogleCloudController extends Controller
         $genReq->setGenerationConfig($generationConfig);
 
         try {
-            // Configura l'autenticazione per PredictionServiceClient usando SOLO variabili d'ambiente
+            // Configura l'autenticazione per PredictionServiceClient usando il config
             $clientOptions = [];
 
             $keyFileConfig = config('google.key_file');
-            if (is_callable($keyFileConfig)) {
-                $keyFileConfig = call_user_func($keyFileConfig);
-            }
 
             if (empty($keyFileConfig) || !is_array($keyFileConfig)) {
-                throw new \Exception('Google Cloud credentials not provided in environment variables. Please set GOOGLE_CLOUD_CLIENT_EMAIL and GOOGLE_CLOUD_PRIVATE_KEY.');
+                throw new \Exception('Google Cloud credentials not provided in config. Please check config/google.php configuration.');
             }
 
             // Basic validation - assicurati che i campi critici siano presenti
             if (empty($keyFileConfig['client_email']) || empty($keyFileConfig['private_key'])) {
-                throw new \Exception('Google Cloud credentials incomplete: client_email or private_key missing in environment variables.');
+                throw new \Exception('Google Cloud credentials incomplete: client_email or private_key missing in config.');
             }
 
             $clientOptions['credentials'] = $keyFileConfig;

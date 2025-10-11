@@ -5,7 +5,6 @@
         </div>
         <div class="lg:col-span-2 space-y-6">
             @include('components.jobs-table')
-            @include('components.export-buttons')
         </div>
     </div>
 @endcomponent
