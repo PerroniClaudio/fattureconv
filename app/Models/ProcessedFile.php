@@ -25,6 +25,7 @@ class ProcessedFile extends Model
         'extracted_text',
         'structured_json',
         'word_path',
+        'merged_pdf_path',
         'status',
         'error_message',
     ];

@@ -61,6 +61,11 @@ Route::get('/', function () {
     return view('login');
 })->name('login.page');
 
+Route::get('/test-merge', function () {
+    $job = new \App\Jobs\MergePdfJob(36);
+    $job->handle();
+    return 'Job executed';
+});
 
 /*
 |--------------------------------------------------------------------------

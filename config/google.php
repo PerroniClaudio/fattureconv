@@ -18,4 +18,5 @@ return [
         'client_x509_cert_url' => env('GOOGLE_CLOUD_CLIENT_X509_CERT_URL'),
         'universe_domain' => env('GOOGLE_CLOUD_UNIVERSE_DOMAIN', 'googleapis.com'),
     ],
+    'shared_drive_id' => env('SHARED_DRIVE_ID'),
 ];
