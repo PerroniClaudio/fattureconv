@@ -42,4 +42,9 @@ return [
         'tenant' => env('MICROSOFT_TENANT'),
     ],
 
+    'cloudconvert' => [
+        'api_key' => env('CLOUDCONVERT_API_KEY'),
+        'sandbox' => env('CLOUDCONVERT_SANDBOX', false),
+    ],
+
 ];

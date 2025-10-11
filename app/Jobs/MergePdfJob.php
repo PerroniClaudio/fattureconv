@@ -8,8 +8,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Models\ProcessedFile;
 use setasign\Fpdi\Fpdi;
-use Mpdf\Mpdf;
-use PhpOffice\PhpWord\IOFactory;
+use CloudConvert\CloudConvert;
+use CloudConvert\Models\Job;
+use CloudConvert\Models\Task;
 use Exception;
 
 class MergePdfJob implements ShouldQueue
@@ -56,8 +57,9 @@ class MergePdfJob implements ShouldQueue
             $currentStep = 'downloading_word';
             $wordContent = $disk->get($processedFile->word_path);
 
-            // 2) Converti Word in PDF usando librerie locali
-            $pdfFromWordContent = $this->convertWordToPdfViaLocalLibraries($wordContent, basename($processedFile->word_path));
+            // 2) Converti Word in PDF usando CloudConvert
+            $currentStep = 'converting_word_to_pdf';
+            $pdfFromWordContent = $this->convertWordToPdfViaCloudConvert($wordContent, basename($processedFile->word_path));
 
             // 3) Scarica il PDF originale (in memoria)
             $currentStep = 'downloading_original_pdf';
@@ -69,7 +71,8 @@ class MergePdfJob implements ShouldQueue
 
             // 5) Carica il PDF unito su GCS
             $currentStep = 'uploading_merged_pdf';
-            $gcsMergedPath = 'merged_pdfs/merged_' . $this->processedFileId . '.pdf';
+            $originalPdfName = basename($processedFile->gcs_path);
+            $gcsMergedPath = 'merged-pdf/' . $this->processedFileId . '/' . $originalPdfName;
             $disk->put($gcsMergedPath, $mergedPdfContent);
 
             // 6) Aggiorna il modello
@@ -78,80 +81,137 @@ class MergePdfJob implements ShouldQueue
             $processedFile->save();
 
         } catch (Exception $e) {
-            Log::error('MergePdfJob failed', ['exception' => $e, 'processed_file_id' => $this->processedFileId, 'step' => $currentStep]);
+            Log::error('MergePdfJob failed', [
+                'exception' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'processed_file_id' => $this->processedFileId,
+                'step' => $currentStep
+            ]);
+            
             try {
                 $processedFile->status = 'merge_error';
                 $processedFile->error_message = '[' . $currentStep . '] ' . substr($e->getMessage(), 0, 1000);
                 $processedFile->save();
             } catch (Exception $inner) {
-                Log::error('MergePdfJob failed to update ProcessedFile after exception', ['exception' => $inner]);
+                Log::error('MergePdfJob failed to update ProcessedFile after exception', ['exception' => $inner->getMessage()]);
             }
             return;
         }
     }
 
-
-
-
     /**
-     * Converte DOCX in PDF usando LibreOffice.
+     * Converte DOCX in PDF usando CloudConvert API.
      */
-    private function convertWordToPdfViaLocalLibraries(string $wordContent, string $fileName): string
+    private function convertWordToPdfViaCloudConvert(string $wordContent, string $fileName): string
     {
-        $tempWordFile = null;
-        $tempDir = sys_get_temp_dir();
+        $jobId = null;
         
         try {
-            // 1) Salva il file Word temporaneamente
-            $tempWordFile = $tempDir . '/' . uniqid('word_', true) . '.docx';
-            file_put_contents($tempWordFile, $wordContent);
+            // Inizializza CloudConvert
+            $cloudconvert = new CloudConvert([
+                'api_key' => config('services.cloudconvert.api_key'),
+                'sandbox' => config('services.cloudconvert.sandbox', false)
+            ]);
             
-            // 2) Comando LibreOffice per conversione
-            $command = sprintf(
-                'libreoffice --headless --convert-to pdf --outdir %s %s 2>&1',
-                escapeshellarg($tempDir),
-                escapeshellarg($tempWordFile)
-            );
+            Log::info('CloudConvert: Inizio conversione', ['filename' => $fileName]);
             
-            // 3) Esegui la conversione
-            exec($command, $output, $returnCode);
+            // Crea il job di conversione
+            $job = (new Job())
+                ->addTask(
+                    new Task('import/upload', 'upload-word-file')
+                )
+                ->addTask(
+                    (new Task('convert', 'convert-to-pdf'))
+                        ->set('input', 'upload-word-file')
+                        ->set('output_format', 'pdf')
+                        ->set('engine', 'office')
+                        ->set('optimize_print', true)
+                )
+                ->addTask(
+                    (new Task('export/url', 'export-pdf'))
+                        ->set('input', 'convert-to-pdf')
+                );
             
-            if ($returnCode !== 0) {
-                throw new Exception('LibreOffice conversion failed: ' . implode("\n", $output));
+            // Crea il job su CloudConvert
+            $job = $cloudconvert->jobs()->create($job);
+            $jobId = $job->getId();
+            
+            Log::info('CloudConvert: Job creato', ['job_id' => $jobId]);
+            
+            // Trova il task di upload
+            $uploadTask = $job->getTasks()->whereName('upload-word-file')[0];
+            
+            // Crea uno stream dal contenuto del file
+            $stream = fopen('php://temp', 'r+');
+            if (!$stream) {
+                throw new Exception('Impossibile creare stream temporaneo per upload');
             }
             
-            // 4) LibreOffice crea il PDF con lo stesso nome del file di input
-            $expectedPdfPath = str_replace('.docx', '.pdf', $tempWordFile);
+            fwrite($stream, $wordContent);
+            rewind($stream);
             
-            if (!file_exists($expectedPdfPath)) {
-                throw new Exception('PDF file not generated by LibreOffice');
+            try {
+                // Upload del file
+                Log::info('CloudConvert: Upload file in corso', ['job_id' => $jobId]);
+                $cloudconvert->tasks()->upload($uploadTask, $stream, $fileName);
+                
+                // Chiudi lo stream solo se è ancora valido
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            } catch (Exception $e) {
+                // Assicurati di chiudere lo stream in caso di errore
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+                throw $e;
             }
             
-            // 5) Leggi il contenuto del PDF
-            $pdfContent = file_get_contents($expectedPdfPath);
+            // Attendi il completamento del job
+            Log::info('CloudConvert: Attesa completamento conversione', ['job_id' => $jobId]);
+            $job = $cloudconvert->jobs()->wait($job);
             
-            // 6) Pulizia file temporanei
-            if (file_exists($tempWordFile)) {
-                unlink($tempWordFile);
+            // Verifica lo status
+            if ($job->getStatus() !== 'finished') {
+                throw new Exception('CloudConvert job failed with status: ' . $job->getStatus());
             }
-            if (file_exists($expectedPdfPath)) {
-                unlink($expectedPdfPath);
+            
+            Log::info('CloudConvert: Conversione completata', ['job_id' => $jobId]);
+            
+            // Trova il task di export
+            $exportTask = $job->getTasks()->whereName('export-pdf')[0];
+            $result = $exportTask->getResult();
+            
+            if (!isset($result->files) || count($result->files) === 0) {
+                throw new Exception('CloudConvert: Nessun file PDF generato');
             }
+            
+            $file = $result->files[0];
+            
+            // Download del PDF convertito
+            Log::info('CloudConvert: Download PDF', ['url' => $file->url]);
+            $pdfContent = file_get_contents($file->url);
+            
+            if (!$pdfContent) {
+                throw new Exception('CloudConvert: Impossibile scaricare il PDF convertito');
+            }
+            
+            Log::info('CloudConvert: Conversione completata con successo', [
+                'job_id' => $jobId,
+                'pdf_size' => strlen($pdfContent)
+            ]);
             
             return $pdfContent;
             
         } catch (Exception $e) {
-            // Pulizia in caso di errore
-            if ($tempWordFile && file_exists($tempWordFile)) {
-                unlink($tempWordFile);
-            }
+            Log::error('CloudConvert: Errore durante la conversione', [
+                'job_id' => $jobId,
+                'filename' => $fileName,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             
-            $expectedPdfPath = isset($tempWordFile) ? str_replace('.docx', '.pdf', $tempWordFile) : null;
-            if ($expectedPdfPath && file_exists($expectedPdfPath)) {
-                unlink($expectedPdfPath);
-            }
-            
-            throw new Exception("Errore conversione Word->PDF con LibreOffice: " . $e->getMessage());
+            throw new Exception("Errore conversione Word->PDF con CloudConvert: " . $e->getMessage());
         }
     }
 
@@ -164,13 +224,20 @@ class MergePdfJob implements ShouldQueue
         $tempFiles = []; // Per tracciare i file temporanei da eliminare
 
         try {
-            foreach ($pdfContents as $pdfContent) {
+            foreach ($pdfContents as $index => $pdfContent) {
                 // Crea un file temporaneo su disco
                 $tempPath = tempnam(sys_get_temp_dir(), 'pdf_merge_');
                 file_put_contents($tempPath, $pdfContent);
                 $tempFiles[] = $tempPath; // Traccia per pulizia
 
+                Log::info('MergePDF: Processing PDF', [
+                    'index' => $index,
+                    'size' => strlen($pdfContent),
+                    'temp_file' => $tempPath
+                ]);
+
                 $pageCount = $pdf->setSourceFile($tempPath);
+                
                 for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
                     $templateId = $pdf->importPage($pageNo);
                     $size = $pdf->getTemplateSize($templateId);
@@ -181,6 +248,8 @@ class MergePdfJob implements ShouldQueue
 
             // Output in memoria
             $result = $pdf->Output('', 'S');
+
+            Log::info('MergePDF: Merge completato', ['merged_size' => strlen($result)]);
 
             // Pulizia dei file temporanei
             foreach ($tempFiles as $tempFile) {
@@ -198,6 +267,12 @@ class MergePdfJob implements ShouldQueue
                     unlink($tempFile);
                 }
             }
+            
+            Log::error('MergePDF: Errore durante il merge', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             throw $e;
         }
     }
