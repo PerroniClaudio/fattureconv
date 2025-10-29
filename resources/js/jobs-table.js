@@ -151,7 +151,7 @@ export function updateRow(id, data, inProgressTable) {
     } else {
         let badgeClass = "badge";
         if (
-            ["processed", "completed", "ai_completed", "completato"].includes(
+            ["processed", "completed", "ai_completed", "merged", "completato"].includes(
                 status
             )
         )
@@ -219,6 +219,7 @@ export function renderCompletedRow(row, completedTbody) {
         word_generated: "Documento generato",
         uploading_word: "Upload documento",
         completed: "Completato",
+        merged: "Completato",
         word_missing: "Documento mancante",
         processing: "In elaborazione",
         error: "Errore",
@@ -232,7 +233,7 @@ export function renderCompletedRow(row, completedTbody) {
     );
     let badgeClass = "badge";
     if (
-        ["processed", "completed", "ai_completed", "completato"].includes(
+        ["processed", "completed", "ai_completed", "merged", "completato"].includes(
             status
         )
     )
