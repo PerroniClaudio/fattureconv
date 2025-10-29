@@ -55,13 +55,13 @@ class GoogleCloudController extends Controller
      * @return mixed Risposta di Vertex AI (placeholder)
      */
 
-    public function callVertexAI(string $testo, ?string $prompt = null, string $model = 'gemini-2.5-flash'): array
+    public function callVertexAI(string $testo, ?string $prompt = null, string $model = 'gemini-2.5-pro'): array
     {
         $projectId = config('google.key_file.project_id', 'tuo-progetto-default');
         $location = env('GOOGLE_CLOUD_LOCATION', 'eu-west8');
 
         // Costruisci il resource name del modello publisher (google) + modello richiesto
-        // Esempio: projects/{project}/locations/{location}/publishers/google/models/gemini-2.5-flash
+        // Esempio: projects/{project}/locations/{location}/publishers/google/models/gemini-2.5-pro
         $modelResource = sprintf('projects/%s/locations/%s/publishers/google/models/%s', $projectId, $location, $model);
 
         $promptFinale = ($prompt ?? $this->defaultPrompt) . "\n\nTesto della fattura: " . $testo;
@@ -77,7 +77,7 @@ class GoogleCloudController extends Controller
         // Riduci aleatorietà e permetti una risposta più lunga (aumenta se necessario)
         $generationConfig->setTemperature(0.0);
         // Aumenta il limite massimo di token di output per evitare che la risposta venga troncata
-        $generationConfig->setMaxOutputTokens(10000);
+        $generationConfig->setMaxOutputTokens(60000);
         // Genera un solo candidato (più semplice da parsare)
         $generationConfig->setCandidateCount(1);
         $generationConfig->setTopP(0.8);
