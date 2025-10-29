@@ -15,7 +15,7 @@
                 'generating_word',
                 'uploading_word',
             ];
-            $completedStatuses = ['ai_completed', 'word_generated', 'completed', 'processed', 'word_missing'];
+            $completedStatuses = ['ai_completed', 'word_generated', 'completed', 'processed', 'word_missing', 'merged'];
             $inProgress = $items->filter(function ($r) use ($inProgressStatuses) {
                 return in_array(strtolower($r->status ?? ''), $inProgressStatuses);
             });

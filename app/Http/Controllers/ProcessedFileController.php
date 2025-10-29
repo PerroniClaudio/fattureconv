@@ -22,7 +22,11 @@ class ProcessedFileController extends Controller
         // I file con soft delete vengono automaticamente esclusi dal trait SoftDeletes
         $query = ProcessedFile::query();
         if ($status) {
-            $query->where('status', $status);
+            if ($status === 'completed') {
+                $query->whereIn('status', ['completed', 'merged']);
+            } else {
+                $query->where('status', $status);
+            }
         }
 
         $total = $query->count();
