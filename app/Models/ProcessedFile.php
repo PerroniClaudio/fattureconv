@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Laravel\Scout\Searchable;
 
 /**
  * Modello Eloquent per la tabella processed_files.
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class ProcessedFile extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, Searchable;
 
     protected $table = 'processed_files';
 
@@ -36,4 +37,17 @@ class ProcessedFile extends Model
     protected $casts = [
         'structured_json' => 'array',
     ];
+
+    /**
+     * Define the searchable data for Laravel Scout.
+     */
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'original_filename' => $this->original_filename,
+            'gcs_path' => $this->gcs_path,
+            'extracted_text' => $this->extracted_text,
+        ];
+    }
 }

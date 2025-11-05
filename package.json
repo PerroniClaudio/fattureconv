@@ -16,6 +16,7 @@
         "vite": "^7.0.4"
     },
     "dependencies": {
+        "fast-glob": "^3.3.3",
         "filepond": "^4.32.9",
         "filepond-plugin-file-validate-type": "^1.2.9"
     }

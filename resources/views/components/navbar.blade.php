@@ -8,6 +8,7 @@
                 <li><a href="/app" class="">Fatture</a></li>
                 <li><a href="{{ route('exports.page') }}">Esporta Excel</a></li>
                 <li><a href="/zip-exports">Esportazioni ZIP</a></li>
+                <li><a href="{{ route('archive.index') }}">Archivio</a></li>
             @endauth
         </ul>
     </div>

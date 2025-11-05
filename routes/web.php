@@ -4,6 +4,7 @@ use App\Http\Controllers\DocumentController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UploadController;
 use App\Http\Controllers\ProcessedFileController;
+use App\Http\Controllers\ArchiveController;
 use App\Http\Controllers\ZipExportController;
 use App\Models\ProcessedFile;
 use Illuminate\Support\Facades\Storage;
@@ -55,7 +56,7 @@ Route::get('/logo', function () {
 
 // Login
 Route::get('/', function () {
-    if (auth()->check()) {
+    if (auth()) {
         return redirect('/app');
     }
     return view('login');
@@ -125,6 +126,12 @@ Route::middleware('auth')->group(function () {
     // Esportazione ZIP
     Route::get('/zip-exports', [ZipExportController::class, 'index'])
         ->name('zip-exports.index');
+
+    // Archivio 
+
+    Route::get('/archive', function () {
+        return view('archive');
+    })->name('archive.index');
 });
 
 /*
@@ -167,6 +174,11 @@ Route::prefix('api')->middleware('auth')->group(function () {
         Route::get('/{id}/download', [ZipExportController::class, 'download'])
             ->name('api.zip-exports.download');
     });
+
+    Route::get('/archive', [ArchiveController::class, 'index'])
+        ->name('api.archive.index');
+    Route::get('/archive/search', [ArchiveController::class, 'search'])
+        ->name('api.archive.search');
 });
 
 /*
