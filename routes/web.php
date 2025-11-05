@@ -118,6 +118,10 @@ Route::middleware('auth')->group(function () {
         [ProcessedFileController::class, 'download'])
         ->name('processed-files.download');
 
+    Route::get('/processed-files/{id}/download-merged',
+        [ProcessedFileController::class, 'downloadMerged'])
+        ->name('processed-files.download-merged');
+
     // Esportazione ZIP
     Route::get('/zip-exports', [ZipExportController::class, 'index'])
         ->name('zip-exports.index');
@@ -144,6 +148,9 @@ Route::prefix('api')->middleware('auth')->group(function () {
         
         Route::delete('/{id}', [ProcessedFileController::class, 'destroy'])
             ->name('api.processed-files.destroy');
+
+        Route::post('/{id}/merge', [ProcessedFileController::class, 'merge'])
+            ->name('api.processed-files.merge');
     });
 
     // Zip Exports API

@@ -10,7 +10,6 @@ use App\Models\ProcessedFile;
 use App\Http\Controllers\PdfParserController;
 use App\Http\Controllers\GoogleCloudController;
 use App\Http\Controllers\DocumentController;
-use App\Jobs\MergePdfJob;
 use Exception;
 
 class GenerateFattura implements ShouldQueue
@@ -107,9 +106,6 @@ class GenerateFattura implements ShouldQueue
                 $processedFile->word_path = $gcsPath;
                 $processedFile->status = 'completed';
                 $processedFile->save();
-
-                // Dispatch del job per unire i PDF
-                MergePdfJob::dispatch($this->processedFileId);
 
                 // Rimuoviamo il file locale se presente
                 @unlink($localWordPath);

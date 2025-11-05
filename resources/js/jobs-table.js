@@ -50,6 +50,74 @@ export function formatDate(iso) {
 }
 
 /**
+ * Costruisce l'HTML per la colonna azioni, includendo download e merge.
+ * @param {Object} item - Dati del job
+ * @param {Object} options - Opzioni di rendering
+ * @param {boolean} [options.includeDelete=false] - Se includere il bottone di eliminazione
+ * @returns {string} HTML dei pulsanti azione
+ */
+function buildActionButtons(item, { includeDelete = false } = {}) {
+    if (!item || typeof item.id === "undefined" || item.id === null) {
+        return `<button class="btn btn-sm btn-ghost" disabled>Non disponibile</button>`;
+    }
+    const id = Number(item.id);
+    const safeId = escapeHtml(String(id));
+    const menuItems = [];
+
+    if (item.word_path) {
+        menuItems.push(
+            `<li><a href="/processed-files/${safeId}/download" data-download-url="/processed-files/${safeId}/download">Scarica Word</a></li>`
+        );
+    } else {
+        menuItems.push(
+            `<li class="disabled"><span>Word non disponibile</span></li>`
+        );
+    }
+
+    if (item.merged_pdf_path) {
+        menuItems.push(
+            `<li><a href="/processed-files/${safeId}/download-merged" data-download-merged-url="/processed-files/${safeId}/download-merged">Scarica PDF unito</a></li>`
+        );
+    } else if ((item.status || "").toLowerCase() === "merging") {
+        menuItems.push(
+            `<li class="disabled"><span class="flex items-center gap-2">Merge in corso <span class="loading loading-xs loading-spinner"></span></span></li>`
+        );
+    } else if (item.word_path && item.gcs_path) {
+        menuItems.push(
+            `<li><button type="button" class="flex items-center gap-2" data-merge-id="${safeId}" onclick="window.triggerMerge(${safeId}, this)">Avvia unione documenti</button></li>`
+        );
+    } else {
+        menuItems.push(
+            `<li class="disabled"><span>Merge non disponibile</span></li>`
+        );
+    }
+
+    if (includeDelete) {
+        const fileName = escapeHtml(
+            item.original_filename || item.gcs_path || "—"
+        ).replace(/'/g, "\\'");
+        menuItems.push(
+            `<li><button type="button" class="flex items-center gap-2 text-error" onclick="window.deleteProcessedFile(${safeId}, '${fileName}')">Elimina</button></li>`
+        );
+    }
+
+    return `
+<div class="dropdown dropdown-end">
+  <button type="button" class="btn btn-sm btn-ghost btn-square" tabindex="0" aria-label="Azioni">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="6" r="1.25" />
+      <circle cx="12" cy="12" r="1.25" />
+      <circle cx="12" cy="18" r="1.25" />
+    </svg>
+    <span class="sr-only">Azioni</span>
+  </button>
+  <ul class="menu menu-sm dropdown-content bg-base-200 rounded-box z-10 mt-2 w-56 p-2 shadow" tabindex="0">
+    ${menuItems.join("")}
+  </ul>
+</div>`;
+}
+
+/**
  * Renderizza una riga della tabella "in corso" per un job
  * @param {Object} item - Oggetto job
  * @param {HTMLElement} inProgressTable - Tabella HTML
@@ -73,6 +141,8 @@ export function renderRow(item, inProgressTable) {
         uploading_word: "Upload documento",
         completed: "Completato",
         merged: "Completato",
+        merging: "Merge in corso",
+        merge_error: "Errore merge",
         word_missing: "Documento mancante",
         processing: "In elaborazione",
         error: "Errore",
@@ -91,7 +161,7 @@ export function renderRow(item, inProgressTable) {
     <td>${fileName}</td>
     <td class="status-cell">${label}</td>
     <td>${date}</td>
-    <td class="actions-cell"><button class="btn btn-sm btn-ghost" disabled>Non disponibile</button></td>
+    <td class="actions-cell">${buildActionButtons(item)}</td>
   `;
     tbody.appendChild(tr);
     return tr;
@@ -120,6 +190,8 @@ export function updateRow(id, data, inProgressTable) {
         uploading_word: "Upload documento",
         completed: "Completato",
         merged: "Completato",
+        merging: "Merge in corso",
+        merge_error: "Errore merge",
         word_missing: "Documento mancante",
         processing: "In elaborazione",
         error: "Errore",
@@ -130,7 +202,7 @@ export function updateRow(id, data, inProgressTable) {
             .replace(/_/g, " ")
             .replace(/\b\w/g, (c) => c.toUpperCase()) ||
         "—";
-    if (status === "error" || status === "errore") {
+    if (["error", "errore", "merge_error"].includes(status)) {
         const msg = data.error_message || "Errore non disponibile";
         const structured = JSON.stringify(data.structured_json || "", null, 2);
         const extracted = data.extracted_text || "";
@@ -151,9 +223,13 @@ export function updateRow(id, data, inProgressTable) {
     } else {
         let badgeClass = "badge";
         if (
-            ["processed", "completed", "ai_completed", "merged", "completato"].includes(
-                status
-            )
+            [
+                "processed",
+                "completed",
+                "ai_completed",
+                "merged",
+                "completato",
+            ].includes(status)
         )
             badgeClass = "badge badge-success";
         else if (
@@ -165,6 +241,7 @@ export function updateRow(id, data, inProgressTable) {
                 "calling_ai",
                 "generating_word",
                 "uploading_word",
+                "merging",
             ].includes(status)
         )
             badgeClass = "badge badge-secondary";
@@ -177,6 +254,7 @@ export function updateRow(id, data, inProgressTable) {
                 "calling_ai",
                 "generating_word",
                 "uploading_word",
+                "merging",
             ].includes(status)
         ) {
             statusCell.innerHTML = `<span class="${badgeClass}">${escapeHtml(
@@ -188,11 +266,7 @@ export function updateRow(id, data, inProgressTable) {
             )}</span>`;
         }
     }
-    if (data.word_path) {
-        actionsCell.innerHTML = `<a class="btn btn-sm btn-primary" href="/processed-files/${id}/download" data-download-url="/processed-files/${id}/download">Download</a>`;
-    } else {
-        actionsCell.innerHTML = `<button class="btn btn-sm btn-ghost" disabled>Non disponibile</button>`;
-    }
+    actionsCell.innerHTML = buildActionButtons(data);
 }
 
 /**
@@ -200,12 +274,7 @@ export function updateRow(id, data, inProgressTable) {
  * @param {Object} row - Oggetto job
  * @param {HTMLElement} completedTbody - tbody della tabella completati
  */
-export function renderCompletedRow(row, completedTbody) {
-    const tr = document.createElement("tr");
-    // Imposta l'attributo data-id così la rimozione della riga funziona correttamente
-    if (typeof row.id !== "undefined" && row.id !== null) {
-        tr.setAttribute("data-id", String(row.id));
-    }
+function populateCompletedRowElement(tr, row) {
     const fileName = escapeHtml(row.original_filename || row.gcs_path || "—");
     const date = formatDate(row.created_at || "");
     const status = (row.status || "").toLowerCase();
@@ -220,6 +289,8 @@ export function renderCompletedRow(row, completedTbody) {
         uploading_word: "Upload documento",
         completed: "Completato",
         merged: "Completato",
+        merging: "Merge in corso",
+        merge_error: "Errore merge",
         word_missing: "Documento mancante",
         processing: "In elaborazione",
         error: "Errore",
@@ -233,12 +304,16 @@ export function renderCompletedRow(row, completedTbody) {
     );
     let badgeClass = "badge";
     if (
-        ["processed", "completed", "ai_completed", "merged", "completato"].includes(
-            status
-        )
+        [
+            "processed",
+            "completed",
+            "ai_completed",
+            "merged",
+            "completato",
+        ].includes(status)
     )
         badgeClass = "badge badge-success";
-    else if (["error", "errore"].includes(status))
+    else if (["error", "errore", "merge_error"].includes(status))
         badgeClass = "badge badge-error";
     else if (
         [
@@ -249,9 +324,11 @@ export function renderCompletedRow(row, completedTbody) {
             "calling_ai",
             "generating_word",
             "uploading_word",
+            "merging",
         ].includes(status)
     )
         badgeClass = "badge badge-secondary";
+    const isMerging = status === "merging";
     const statusHtml =
         badgeClass === "badge badge-error"
             ? `<button class="badge badge-error" title="${escapeHtml(
@@ -271,21 +348,36 @@ export function renderCompletedRow(row, completedTbody) {
               )}" onclick="showErrorElement(this)">${escapeHtml(
                   label
               )}</button>`
+            : isMerging
+            ? `<span class="${badgeClass}">${escapeHtml(
+                  label
+              )} <span class="loading loading-spinner loading-xs align-middle"></span></span>`
             : `<span class="${badgeClass}">${escapeHtml(label)}</span>`;
 
-    const downloadButton = row.word_path
-        ? `<a class="btn btn-sm btn-primary mr-1" href="/processed-files/${row.id}/download" data-download-url="/processed-files/${row.id}/download">Download</a>`
-        : `<button class="btn btn-sm btn-ghost mr-1" disabled>Non disponibile</button>`;
+    const actions = buildActionButtons(row, { includeDelete: true });
 
-    const deleteButton = `<button class="btn btn-sm btn-error" onclick="window.deleteProcessedFile(${
-        row.id
-    }, '${escapeHtml(fileName).replace(/'/g, "\\'")}')">Elimina</button>`;
-
-    const actions = `<div class="flex gap-1">${downloadButton}${deleteButton}</div>`;
     tr.innerHTML = `<th>${escapeHtml(
         String(row.id)
     )}</th><td>${fileName}</td><td class="status-cell">${statusHtml}</td><td>${date}</td><td class="actions-cell">${actions}</td>`;
+}
+
+export function renderCompletedRow(row, completedTbody) {
+    const tr = document.createElement("tr");
+    // Imposta l'attributo data-id così la rimozione della riga funziona correttamente
+    if (typeof row.id !== "undefined" && row.id !== null) {
+        tr.setAttribute("data-id", String(row.id));
+    }
+    populateCompletedRowElement(tr, row);
     completedTbody.appendChild(tr);
+}
+
+export function updateCompletedRow(row) {
+    if (!row || typeof row.id === "undefined" || row.id === null) return;
+    const tr = document.querySelector(
+        `#completed-tbody tr[data-id="${row.id}"]`
+    );
+    if (!tr) return;
+    populateCompletedRowElement(tr, row);
 }
 
 /**
@@ -405,6 +497,80 @@ export async function deleteProcessedFile(id, fileName = "") {
             { once: true }
         );
     });
+}
+
+/**
+ * Avvia il MergePdfJob e aggiorna la UI.
+ * @param {number|string} id - ID del file da unire
+ * @param {HTMLElement} [element] - Bottone che ha invocato l'azione
+ */
+export async function triggerMerge(id, element) {
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId)) {
+        showErrorMessage("ID merge non valido");
+        return;
+    }
+
+    const button =
+        element instanceof HTMLElement
+            ? element
+            : document.querySelector(`button[data-merge-id="${numericId}"]`);
+    let previousHtml = "";
+    if (button) {
+        previousHtml = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML =
+            'Merge in corso <span class="loading loading-spinner loading-xs align-middle ml-1"></span>';
+    }
+
+    try {
+        const response = await fetch(
+            `/api/processed-files/${numericId}/merge`,
+            {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "Content-Type": "application/json",
+                    "X-CSRF-TOKEN":
+                        document
+                            .querySelector('meta[name="csrf-token"]')
+                            ?.getAttribute("content") || "",
+                },
+            }
+        );
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(payload?.error || `Errore HTTP ${response.status}`);
+        }
+
+        if (payload?.already_merged) {
+            showSuccessMessage("Il PDF unito è già disponibile");
+        } else if (payload?.already_in_progress) {
+            showSuccessMessage("Merge già in corso");
+        } else {
+            showSuccessMessage("Merge avviato");
+        }
+
+        const processed = payload?.processed_file;
+        if (processed && typeof processed.id !== "undefined") {
+            const inProgressTable =
+                document.getElementById("in-progress-table");
+            if (inProgressTable) {
+                renderRow(processed, inProgressTable);
+                updateRow(processed.id, processed, inProgressTable);
+            }
+            updateCompletedRow(processed);
+        }
+    } catch (error) {
+        console.error("Errore durante il merge:", error);
+        showErrorMessage(error.message || "Errore durante l'unione dei PDF");
+        if (button && button.isConnected) {
+            button.disabled = false;
+            button.innerHTML = previousHtml || "Unisci PDF";
+        }
+    }
 }
 
 /**
@@ -641,4 +807,5 @@ export function initJobsTable() {
 
     // Rendi la funzione deleteProcessedFile disponibile globalmente
     window.deleteProcessedFile = deleteProcessedFile;
+    window.triggerMerge = triggerMerge;
 }

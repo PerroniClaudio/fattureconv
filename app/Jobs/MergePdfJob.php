@@ -48,6 +48,11 @@ class MergePdfJob implements ShouldQueue
             return;
         }
 
+        if ($processedFile->status !== 'merging') {
+            $processedFile->status = 'merging';
+            $processedFile->save();
+        }
+
         $currentStep = 'started';
 
         try {

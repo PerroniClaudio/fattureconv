@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\ProcessedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use App\Jobs\MergePdfJob;
 
 class ProcessedFileController extends Controller
 {
@@ -23,7 +24,7 @@ class ProcessedFileController extends Controller
         $query = ProcessedFile::query();
         if ($status) {
             if ($status === 'completed') {
-                $query->whereIn('status', ['completed', 'merged']);
+                $query->whereIn('status', ['completed', 'merged', 'merging']);
             } else {
                 $query->where('status', $status);
             }
@@ -57,7 +58,7 @@ class ProcessedFileController extends Controller
         }
 
         // I file con soft delete vengono automaticamente esclusi dal trait SoftDeletes
-        $files = ProcessedFile::whereIn('id', $ids)->get(['id','status','word_path','error_message','structured_json','extracted_text','original_filename','gcs_path','created_at']);
+        $files = ProcessedFile::whereIn('id', $ids)->get(['id','status','word_path','merged_pdf_path','error_message','structured_json','extracted_text','original_filename','gcs_path','created_at']);
 
         // return as object keyed by id for easier client updates
         $payload = [];
@@ -66,6 +67,7 @@ class ProcessedFileController extends Controller
                 'id' => $f->id,
                 'status' => $f->status,
                 'word_path' => $f->word_path,
+                'merged_pdf_path' => $f->merged_pdf_path,
                 'error_message' => $f->error_message,
                 'structured_json' => $f->structured_json,
                 'extracted_text' => $f->extracted_text,
@@ -85,13 +87,13 @@ class ProcessedFileController extends Controller
     public function inProgress(Request $request)
     {
         $limit = (int) $request->query('limit', 50);
-        $inProgressStatuses = ['pending','uploaded','processing','parsing_pdf','calling_ai','generating_word','uploading_word'];
+        $inProgressStatuses = ['pending','uploaded','processing','parsing_pdf','calling_ai','generating_word','uploading_word','merging'];
 
         // I file con soft delete vengono automaticamente esclusi dal trait SoftDeletes
         $files = ProcessedFile::whereIn('status', $inProgressStatuses)
             ->orderBy('created_at', 'desc')
             ->limit($limit)
-            ->get(['id','status','original_filename','gcs_path','created_at','word_path','error_message']);
+            ->get(['id','status','original_filename','gcs_path','created_at','word_path','merged_pdf_path','error_message']);
 
         return response()->json($files, 200);
     }
@@ -180,5 +182,100 @@ class ProcessedFileController extends Controller
                 'error' => 'Errore durante l\'eliminazione del file'
             ], 500);
         }
+    }
+
+    /**
+     * Scarica il PDF unito se già presente su GCS.
+     */
+    public function downloadMerged($id)
+    {
+        $pf = ProcessedFile::find($id);
+        if (!$pf || empty($pf->merged_pdf_path)) {
+            return abort(404);
+        }
+
+        try {
+            $disk = Storage::disk('gcs');
+            if (!$disk->exists($pf->merged_pdf_path)) {
+                return abort(404);
+            }
+
+            $originalName = $pf->original_filename ?: basename($pf->merged_pdf_path);
+            $baseName = pathinfo($originalName, PATHINFO_FILENAME);
+            $sanitizedBase = preg_replace('/[^A-Za-z0-9_\-\. ]+/', '_', $baseName);
+            $downloadFilename = $sanitizedBase . '-merged.pdf';
+
+            if (method_exists($disk, 'readStream')) {
+                $stream = $disk->readStream($pf->merged_pdf_path);
+                if ($stream === false) {
+                    throw new \RuntimeException('readStream returned false');
+                }
+
+                return response()->stream(function () use ($stream) {
+                    while (!feof($stream)) {
+                        echo fread($stream, 8192);
+                    }
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                }, 200, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="' . $downloadFilename . '"',
+                ]);
+            }
+
+            $contents = $disk->get($pf->merged_pdf_path);
+            return response($contents, 200)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'attachment; filename="' . $downloadFilename . '"');
+        } catch (\Exception $e) {
+            Log::error('ProcessedFileController::downloadMerged error', [
+                'exception' => $e->getMessage(),
+                'id' => $id,
+            ]);
+            return abort(500);
+        }
+    }
+
+    /**
+     * Avvia il MergePdfJob per un ProcessedFile e restituisce i dati aggiornati.
+     */
+    public function merge(Request $request, $id)
+    {
+        $processedFile = ProcessedFile::find($id);
+
+        if (!$processedFile) {
+            return response()->json(['error' => 'File non trovato'], 404);
+        }
+
+        if (!empty($processedFile->merged_pdf_path)) {
+            return response()->json([
+                'already_merged' => true,
+                'processed_file' => $processedFile,
+            ]);
+        }
+
+        if (empty($processedFile->word_path) || empty($processedFile->gcs_path)) {
+            return response()->json([
+                'error' => 'Impossibile avviare il merge: file Word o PDF originale mancanti',
+            ], 422);
+        }
+
+        if ($processedFile->status === 'merging') {
+            return response()->json([
+                'already_in_progress' => true,
+                'processed_file' => $processedFile,
+            ], 202);
+        }
+
+        $processedFile->status = 'merging';
+        $processedFile->save();
+
+        MergePdfJob::dispatch($processedFile->id);
+
+        return response()->json([
+            'success' => true,
+            'processed_file' => $processedFile,
+        ], 202);
     }
 }
