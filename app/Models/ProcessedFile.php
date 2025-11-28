@@ -29,6 +29,7 @@ class ProcessedFile extends Model
         'merged_pdf_path',
         'status',
         'error_message',
+        'month_reference',
     ];
 
     /**
@@ -36,7 +37,20 @@ class ProcessedFile extends Model
      */
     protected $casts = [
         'structured_json' => 'array',
+        'month_reference' => 'date',
     ];
+
+    /**
+     * The "booted" method of the model.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (ProcessedFile $file) {
+            if (empty($file->month_reference)) {
+                $file->month_reference = now()->subMonth()->startOfMonth();
+            }
+        });
+    }
 
     /**
      * Define the searchable data for Laravel Scout.

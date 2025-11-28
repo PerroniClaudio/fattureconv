@@ -16,8 +16,8 @@ class ArchiveController extends Controller
         $data = $this->validatePeriod($request);
 
         $files = ProcessedFile::query()
-            ->whereYear('created_at', $data['year'])
-            ->whereMonth('created_at', $data['month'])
+            ->whereYear('month_reference', $data['year'])
+            ->whereMonth('month_reference', $data['month'])
             ->orderByDesc('created_at')
             ->get([
                 'id',
@@ -26,6 +26,7 @@ class ArchiveController extends Controller
                 'word_path',
                 'merged_pdf_path',
                 'status',
+                'month_reference',
             ]);
 
         return response()->json([
@@ -46,8 +47,8 @@ class ArchiveController extends Controller
         $results = ProcessedFile::search($validated['query'])
             ->query(function ($query) use ($data) {
                 $query
-                    ->whereYear('created_at', $data['year'])
-                    ->whereMonth('created_at', $data['month']);
+                    ->whereYear('month_reference', $data['year'])
+                    ->whereMonth('month_reference', $data['month']);
             })
             ->take(100)
             ->get();
@@ -82,6 +83,7 @@ class ArchiveController extends Controller
                 'id' => $file->id,
                 'name' => $file->original_filename,
                 'created_at' => optional($file->created_at)->toIso8601String(),
+                'month_reference' => optional($file->month_reference)->format('Y-m-d'),
                 'status' => $file->status,
                 'error_message' => $file->error_message,
                 'word_available' => !empty($file->word_path),

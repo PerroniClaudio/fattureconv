@@ -158,6 +158,9 @@ Route::prefix('api')->middleware('auth')->group(function () {
 
         Route::post('/{id}/merge', [ProcessedFileController::class, 'merge'])
             ->name('api.processed-files.merge');
+
+        Route::put('/{id}/month-reference', [ProcessedFileController::class, 'updateMonthReference'])
+            ->name('api.processed-files.update-month-reference');
     });
 
     // Zip Exports API

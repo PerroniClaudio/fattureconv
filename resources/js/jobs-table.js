@@ -92,6 +92,14 @@ function buildActionButtons(item, { includeDelete = false } = {}) {
         );
     }
 
+    // Month Reference
+    const monthRef = item.month_reference
+        ? escapeHtml(item.month_reference)
+        : "";
+    menuItems.push(
+        `<li><button type="button" onclick="window.openMonthReferenceModal(${safeId}, '${monthRef}')">Modifica mese riferimento</button></li>`
+    );
+
     if (includeDelete) {
         const fileName = escapeHtml(
             item.original_filename || item.gcs_path || "—"
@@ -356,6 +364,7 @@ function populateCompletedRowElement(tr, row) {
 
     const actions = buildActionButtons(row, { includeDelete: true });
 
+    tr.setAttribute("data-status", status);
     tr.innerHTML = `<th>${escapeHtml(
         String(row.id)
     )}</th><td>${fileName}</td><td class="status-cell">${statusHtml}</td><td>${date}</td><td class="actions-cell">${actions}</td>`;
@@ -799,13 +808,71 @@ export function initJobsTable() {
         }
     }
 
-    pollInProgress();
+    async function pollCompletedMerging() {
+        // Only run if completed tab is active
+        if (tabCompletedPanel.classList.contains("hidden")) return;
+
+        // Find all rows with status 'merging'
+        const mergingRows = completedTbody.querySelectorAll(
+            'tr[data-status="merging"]'
+        );
+        if (mergingRows.length === 0) return;
+
+        const ids = Array.from(mergingRows)
+            .map((tr) => tr.getAttribute("data-id"))
+            .filter((id) => id);
+        if (ids.length === 0) return;
+
+        try {
+            const res = await fetch(statusesEndpoint, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    "X-CSRF-TOKEN":
+                        document
+                            .querySelector('meta[name="csrf-token"]')
+                            ?.getAttribute("content") || "",
+                },
+                body: JSON.stringify({ ids }),
+            });
+
+            if (!res.ok) return;
+            const data = await res.json();
+
+            for (const id of ids) {
+                if (data[id]) {
+                    updateCompletedRow(data[id]);
+                }
+            }
+        } catch (e) {
+            console.warn("Polling completed merging error:", e);
+        }
+    }
+
     const interval = setInterval(pollInProgress, 3000);
+    const completedInterval = setInterval(pollCompletedMerging, 3000);
     window.addEventListener("beforeunload", function () {
         clearInterval(interval);
+        clearInterval(completedInterval);
     });
 
     // Rendi la funzione deleteProcessedFile disponibile globalmente
     window.deleteProcessedFile = deleteProcessedFile;
     window.triggerMerge = triggerMerge;
+
+    window.addEventListener("processed-file-updated", (event) => {
+        const { id, month_reference } = event.detail;
+        // Update local data if needed, or just re-render row if we have the row
+        const tr = document.querySelector(`tr[data-id="${id}"]`);
+        if (tr) {
+            // We might need to fetch the full object or just update the month_reference in the existing data
+            // Since we don't store the full object in the DOM, we might need to fetch it or just update the attribute if we stored it.
+            // But buildActionButtons uses the item passed to it.
+            // We can try to fetch the status again or just reload the table.
+            // Reloading the table page is easiest.
+            if (!completedTab.classList.contains("tab-active")) return;
+            fetchCompletedPage(currentPage);
+        }
+    });
 }

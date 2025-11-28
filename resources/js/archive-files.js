@@ -1,8 +1,9 @@
 const CONTAINER_ID = "archive-list";
 const TEMPLATE_ID = "archive-list-item-template";
 const csrfToken =
-    document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") ||
-    "";
+    document
+        .querySelector('meta[name="csrf-token"]')
+        ?.getAttribute("content") || "";
 
 const MERGE_POLL_INTERVAL = 3000;
 const MERGE_POLL_TIMEOUT = 120000;
@@ -206,6 +207,18 @@ export function renderArchiveList(files = []) {
             pdfButton.addEventListener("click", (event) => {
                 event.preventDefault();
                 handlePdfButton(file);
+            });
+        }
+
+        const monthRefButton = node.querySelector("[data-month-reference]");
+        if (monthRefButton) {
+            monthRefButton.addEventListener("click", (event) => {
+                event.preventDefault();
+                // Close dropdown if needed (daisyUI handles it usually on focus loss, but explicit close might be good)
+                // Actually, clicking a button inside menu usually closes it if it's a link or button.
+                // But we are opening a modal.
+                const monthRef = file.month_reference || "";
+                window.openMonthReferenceModal(file.id, monthRef);
             });
         }
 
@@ -496,9 +509,7 @@ async function pollStatus() {
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-            throw new Error(
-                payload?.error || `Errore HTTP ${response.status}`
-            );
+            throw new Error(payload?.error || `Errore HTTP ${response.status}`);
         }
 
         const record = payload?.[String(mergeState.fileId)];

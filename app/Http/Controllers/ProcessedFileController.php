@@ -58,7 +58,7 @@ class ProcessedFileController extends Controller
         }
 
         // I file con soft delete vengono automaticamente esclusi dal trait SoftDeletes
-        $files = ProcessedFile::whereIn('id', $ids)->get(['id','status','word_path','merged_pdf_path','error_message','structured_json','extracted_text','original_filename','gcs_path','created_at']);
+        $files = ProcessedFile::whereIn('id', $ids)->get(['id','status','word_path','merged_pdf_path','error_message','structured_json','extracted_text','original_filename','gcs_path','created_at','month_reference']);
 
         // return as object keyed by id for easier client updates
         $payload = [];
@@ -74,6 +74,7 @@ class ProcessedFileController extends Controller
                 'original_filename' => $f->original_filename,
                 'gcs_path' => $f->gcs_path,
                 'created_at' => optional($f->created_at)->toDateTimeString(),
+                'month_reference' => $f->month_reference ? $f->month_reference->format('Y-m-d') : null,
             ];
         }
 
@@ -277,5 +278,24 @@ class ProcessedFileController extends Controller
             'success' => true,
             'processed_file' => $processedFile,
         ], 202);
+    }
+
+    /**
+     * Aggiorna il mese di riferimento per un file processato.
+     */
+    public function updateMonthReference(Request $request, $id)
+    {
+        $request->validate([
+            'month_reference' => 'required|date',
+        ]);
+
+        $processedFile = ProcessedFile::findOrFail($id);
+        $processedFile->month_reference = $request->input('month_reference');
+        $processedFile->save();
+
+        return response()->json([
+            'success' => true,
+            'processed_file' => $processedFile,
+        ]);
     }
 }

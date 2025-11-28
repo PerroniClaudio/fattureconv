@@ -19,15 +19,20 @@
             <span data-file-name class="font-medium truncate"></span>
             <span data-file-date class="block text-sm text-muted"></span>
         </div>
-        <div class="flex items-center gap-2">
-            <button type="button" class="btn btn-sm btn-soft" data-download-word>
-                <x-fileicon-microsoft-word class="h-4 w-4 text-soft-content" />
-                <span class="ml-1">Scarica Word</span>
+        <div class="dropdown dropdown-end">
+            <button type="button" class="btn btn-sm btn-ghost btn-square" tabindex="0" aria-label="Azioni">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"
+                    aria-hidden="true">
+                    <circle cx="12" cy="6" r="1.25" />
+                    <circle cx="12" cy="12" r="1.25" />
+                    <circle cx="12" cy="18" r="1.25" />
+                </svg>
             </button>
-            <button type="button" class="btn btn-sm btn-soft" data-download-pdf>
-                <x-fileicon-adobe-acrobat class="h-4 w-4 text-soft-content" />
-                <span class="ml-1">Scarica PDF</span>
-            </button>
+            <ul class="menu menu-sm dropdown-content bg-base-200 rounded-box z-10 mt-2 w-56 p-2 shadow" tabindex="0">
+                <li><button type="button" data-download-word>Scarica Word</button></li>
+                <li><button type="button" data-download-pdf>Scarica PDF</button></li>
+                <li><button type="button" data-month-reference>Modifica mese riferimento</button></li>
+            </ul>
         </div>
     </li>
 </template>

@@ -1,7 +1,4 @@
-import {
-    fetchArchiveList,
-    searchArchive,
-} from "./archive-files";
+import { fetchArchiveList, searchArchive } from "./archive-files";
 
 document.addEventListener("DOMContentLoaded", () => {
     const yearList = document.getElementById("archive-year-list");
@@ -21,8 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function highlightSelection(list, attr, value) {
         const items = list.querySelectorAll(`[data-${attr}]`);
         items.forEach((item) => {
-            const isActive =
-                String(item.dataset[attr]) === String(value ?? "");
+            const isActive = String(item.dataset[attr]) === String(value ?? "");
             item.classList.toggle("active", isActive);
             item.setAttribute("aria-selected", String(isActive));
             const button = item.querySelector("button");
@@ -92,6 +88,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    window.addEventListener("processed-file-updated", () => {
+        refreshArchive();
+    });
+
     const now = new Date();
     const defaultYear =
         Number.parseInt(
@@ -105,9 +105,8 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     const defaultMonth =
         Number.parseInt(
-            monthList.querySelector(
-                `[data-month="${now.getMonth() + 1}"]`
-            )?.dataset.month ?? "",
+            monthList.querySelector(`[data-month="${now.getMonth() + 1}"]`)
+                ?.dataset.month ?? "",
             10
         ) ||
         Number.parseInt(
