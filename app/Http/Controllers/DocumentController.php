@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\TemplateProcessor;
 use Illuminate\Support\Facades\Storage;
 use App\Models\ProcessedFile;
@@ -98,143 +97,6 @@ class DocumentController extends Controller
             // Prepariamo la tabella items: se presente, inseriamo WordML con placeholder per cloneRow
             $items = $ai['items'] ?? [];
 
-            // Apri il docx e sostituisci il token ${tabella_items} con una tabella WordML contenente una singola riga
-            $zip = new \ZipArchive();
-            if ($zip->open($tmpTemplate) === true) {
-                $docXml = $zip->getFromName('word/document.xml');
-                if ($docXml !== false) {
-                    // la placeholder ${tabella_items} potrebbe essere spezzata in più <w:t> run; proviamo prima la sostituzione semplice
-                    $tableInserted = false;
-                    if (strpos($docXml, '${tabella_items}') !== false) {
-                        if (empty($items) || !is_array($items)) {
-                            $docXml = str_replace('${tabella_items}', '', $docXml);
-                        } else {
-                            $tableRow =
-                                '<w:tr>' .
-                                    '<w:tc><w:p><w:r><w:t>${item_descrizione}</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>${item_imponibile}</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>${item_iva}</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>${item_importo_iva}</w:t></w:r></w:p></w:tc>' .
-                                '</w:tr>';
-
-                            // aggiungi un paragrafo vuoto prima e dopo per lasciare spazio verticale
-                            $emptyPara = '<w:p><w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr><w:r><w:t></w:t></w:r></w:p>';
-
-                            $tableXml =  '<w:tbl>' .
-                                '<w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' .
-                                '<w:tr>' .
-                                    '<w:tc><w:p><w:r><w:t>Descrizione</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>Imponibile</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>% IVA / Esenzione</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>Importo IVA</w:t></w:r></w:p></w:tc>' .
-                                '</w:tr>' .
-                                $tableRow .
-                            '</w:tbl>';
-
-                            $docXml = str_replace('${tabella_items}', $tableXml, $docXml);
-                            $tableInserted = true;
-                        }
-                    }
-
-                    // Se la sostituzione diretta non ha trovato la stringa (perché è spezzata in più <w:t>), cerchiamo la sequenza di testo composta
-                    if (!$tableInserted && empty($items) === false && is_array($items)) {
-                        // estrai tutti i testi w:t in ordine e costruisci un array di tokens con le loro posizioni
-                        $pattern = '/(<w:t[^>]*>)(.*?)<\/w:t>/s';
-                        preg_match_all($pattern, $docXml, $matches, PREG_OFFSET_CAPTURE);
-                        $texts = $matches[2] ?? [];
-                        $positions = $matches[0] ?? [];
-
-                        // cerchiamo una sequenza di testo che, concatenata, formi ${tabella_items}
-                        $target = '${tabella_items}';
-                        $foundRange = null;
-                        for ($start = 0; $start < count($texts); $start++) {
-                            $concat = '';
-                            for ($end = $start; $end < count($texts) && strlen($concat) < strlen($target) + 20; $end++) {
-                                $concat .= $texts[$end][0];
-                                if (strpos($concat, $target) !== false) {
-                                    $foundRange = [$start, $end];
-                                    break 2;
-                                }
-                            }
-                        }
-
-                        if ($foundRange !== null) {
-                            list($s, $e) = $foundRange;
-                            // determiniamo l'offset nella stringa originale per la prima e l'ultima occorrenza trovata
-                            $firstMatch = $positions[$s][1];
-                            $lastMatch = $positions[$e][1] + strlen($positions[$e][0]);
-
-                            // costruisci WordML della tabella come sopra
-                            $tableRow =
-                                '<w:tr>' .
-                                    '<w:tc><w:p><w:r><w:t>${item_descrizione}</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>${item_imponibile}</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>${item_iva}</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>${item_importo_iva}</w:t></w:r></w:p></w:tc>' .
-                                '</w:tr>';
-
-                            // aggiungi un paragrafo vuoto prima e dopo per lasciare spazio verticale
-                            $emptyPara = '<w:p><w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr><w:r><w:t></w:t></w:r></w:p>';
-
-                            $tableXml = '<w:tbl>' .
-                                '<w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' .
-                                '<w:tr>' .
-                                    '<w:tc><w:p><w:r><w:t>Descrizione</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>Imponibile</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>% IVA / Esenzione</w:t></w:r></w:p></w:tc>' .
-                                    '<w:tc><w:p><w:r><w:t>Importo IVA</w:t></w:r></w:p></w:tc>' .
-                                '</w:tr>' .
-                                $tableRow .
-                            '</w:tbl>';
-
-                            // Calcolo preciso degli offset: troviamo la posizione esatta della sottostringa
-                            // ricostruita all'interno dei token tra $s ed $e e sostituiamo solo quella porzione
-                            $targetLen = strlen($target);
-                            // ricostruisci il testo concatenato e trovi la posizione di target
-                            $concat = '';
-                            for ($i = $s; $i <= $e; $i++) {
-                                $concat .= $matches[2][$i][0];
-                            }
-                            $posInConcat = strpos($concat, $target);
-                            if ($posInConcat === false) {
-                                // fallback: rimpiazzo l'intero intervallo (meno probabile)
-                                $docXml = substr($docXml, 0, $firstMatch) . $tableXml . substr($docXml, $lastMatch);
-                            } else {
-                                // trova il token che contiene l'inizio del target
-                                $remaining = $posInConcat;
-                                $startToken = $s;
-                                for ($i = $s; $i <= $e; $i++) {
-                                    $len = strlen($matches[2][$i][0]);
-                                    if ($remaining < $len) { $startToken = $i; break; }
-                                    $remaining -= $len;
-                                }
-
-                                $startOffset = $matches[2][$startToken][1] + $remaining;
-
-                                // calcola fine
-                                $posEndInConcat = $posInConcat + $targetLen - 1;
-                                $remainingEnd = $posEndInConcat;
-                                $endToken = $s;
-                                for ($i = $s; $i <= $e; $i++) {
-                                    $len = strlen($matches[2][$i][0]);
-                                    if ($remainingEnd < $len) { $endToken = $i; break; }
-                                    $remainingEnd -= $len;
-                                }
-                                $endOffset = $matches[2][$endToken][1] + $remainingEnd + 1; // +1 perché end offset esclusivo
-
-                                // sostituisci solo la sottostringa precisa
-                                $docXml = substr($docXml, 0, $startOffset) . $tableXml . substr($docXml, $endOffset);
-                            }
-                            $tableInserted = true;
-                        }
-                    }
-
-                    // Scrivi di nuovo document.xml
-                    $zip->addFromString('word/document.xml', $docXml);
-                }
-                $zip->close();
-            }
-
             // Carica template con TemplateProcessor
             $tp = new TemplateProcessor($tmpTemplate);
             $iva_italia_22 = isset($ai['importo_netto']) && is_numeric($ai['importo_netto']) ? round($ai['importo_netto'] * 0.22, 2) : 0;
@@ -268,22 +130,28 @@ class DocumentController extends Controller
                 $tp->setValue($key, htmlspecialchars($value));
             }
             
-            // Se ci sono items, normalizza i nomi dei campi e poi clona la riga contenente ${item_descrizione} e popola i valori
+            // Se ci sono items, costruisci una tabella valida e sostituisci il placeholder con setComplexBlock
             if (!empty($items) && is_array($items)) {
-                // normalizza ogni item in un array con chiavi: descrizione, imponibile, iva, importo_iva
                 $normalized = [];
                 foreach ($items as $it) {
-                    // supporta diversi nomi di chiave comuni
                     $descr = $it['descrizione'] ?? $it['description'] ?? $it['desc'] ?? '';
                     $impon = $it['imponibile'] ?? $it['imponibile_totale'] ?? $it['amount'] ?? $it['impon'] ?? '';
                     $ivaField = $it['%iva o art. esenzione'] ?? $it['iva_percentuale'] ?? $it['vat'] ?? $it['vat_percent'] ?? '';
                     $impIva = $it['importo_iva'] ?? $it['iva_importo'] ?? $it['vat_amount'] ?? $it['tax_amount'] ?? '';
 
-                    // pulizia/format: rimuovi spazi indesiderati
                     $descr = is_string($descr) ? trim($descr) : $descr;
                     $impon = is_scalar($impon) ? trim((string)$impon) : $impon;
                     $ivaField = is_scalar($ivaField) ? trim((string)$ivaField) : $ivaField;
                     $impIva = is_scalar($impIva) ? trim((string)$impIva) : $impIva;
+
+                    // format numeri se possibile, aggiungendo la valuta se presente
+                    $currencySuffix = isset($ai['valuta']) ? ' ' . $ai['valuta'] : '';
+                    if (is_numeric($impon)) {
+                        $impon = $fmtMoney($impon) . $currencySuffix;
+                    }
+                    if (is_numeric($impIva)) {
+                        $impIva = $fmtMoney($impIva) . $currencySuffix;
+                    }
 
                     $normalized[] = [
                         'descrizione' => $descr,
@@ -293,20 +161,31 @@ class DocumentController extends Controller
                     ];
                 }
 
-                $count = count($normalized);
                 try {
-                    $tp->cloneRow('item_descrizione', $count);
-                    $i = 1;
+                    $table = new \PhpOffice\PhpWord\Element\Table();
+                    // intestazione
+                    $table->addRow();
+                    $table->addCell()->addText('Descrizione');
+                    $table->addCell()->addText('Imponibile');
+                    $table->addCell()->addText('% IVA / Esenzione');
+                    $table->addCell()->addText('Importo IVA');
+
                     foreach ($normalized as $it) {
-                        $tp->setValue("item_descrizione#{$i}", $it['descrizione']);
-                        $tp->setValue("item_imponibile#{$i}", $it['imponibile']);
-                        $tp->setValue("item_iva#{$i}", $it['iva']);
-                        $tp->setValue("item_importo_iva#{$i}", $it['importo_iva']);
-                        $i++;
+                        $table->addRow();
+                        $table->addCell()->addText((string)$it['descrizione']);
+                        $table->addCell()->addText((string)$it['imponibile']);
+                        $table->addCell()->addText((string)$it['iva']);
+                        $table->addCell()->addText((string)$it['importo_iva']);
                     }
+
+                    $tp->setComplexBlock('tabella_items', $table);
                 } catch (\Exception $e) {
-                    Log::error('TemplateProcessor cloneRow failed', ['exception' => $e]);
+                    Log::error('TemplateProcessor setComplexBlock failed', ['exception' => $e]);
+                    $tp->setValue('tabella_items', '');
                 }
+            } else {
+                // nessun item: svuota il placeholder per evitare residui
+                $tp->setValue('tabella_items', '');
             }
 
             // salva file risultante
