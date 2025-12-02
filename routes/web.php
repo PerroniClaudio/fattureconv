@@ -118,6 +118,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/processed-files/{id}/download', 
         [ProcessedFileController::class, 'download'])
         ->name('processed-files.download');
+    Route::get('/processed-files/{id}/download-original',
+        [ProcessedFileController::class, 'downloadOriginal'])
+        ->name('processed-files.download-original');
 
     Route::get('/processed-files/{id}/download-merged',
         [ProcessedFileController::class, 'downloadMerged'])

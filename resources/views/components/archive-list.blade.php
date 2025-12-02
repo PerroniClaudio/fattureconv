@@ -29,6 +29,7 @@
                 </svg>
             </button>
             <ul class="menu menu-sm dropdown-content bg-base-200 rounded-box z-10 mt-2 w-56 p-2 shadow" tabindex="0">
+                <li><button type="button" data-download-original>Scarica file originale</button></li>
                 <li><button type="button" data-download-word>Scarica Word</button></li>
                 <li><button type="button" data-download-pdf>Scarica PDF</button></li>
                 <li><button type="button" data-month-reference>Modifica mese riferimento</button></li>

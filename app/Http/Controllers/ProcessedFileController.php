@@ -155,6 +155,68 @@ class ProcessedFileController extends Controller
     }
 
     /**
+     * Scarica il PDF originale dal bucket (se presente) oppure dal fallback locale.
+     */
+    public function downloadOriginal($id)
+    {
+        $pf = ProcessedFile::find($id);
+        if (!$pf || empty($pf->gcs_path)) {
+            return abort(404);
+        }
+
+        $originalName = $pf->original_filename ?: basename($pf->gcs_path);
+        $baseName = pathinfo($originalName, PATHINFO_FILENAME);
+        $sanitizedBase = preg_replace('/[^A-Za-z0-9_\-\. ]+/', '_', $baseName);
+        $extension = pathinfo($originalName, PATHINFO_EXTENSION) ?: 'pdf';
+        $downloadFilename = $sanitizedBase . '.' . $extension;
+
+        try {
+            $disk = Storage::disk('gcs');
+            if ($disk->exists($pf->gcs_path)) {
+                $mime = $disk->mimeType($pf->gcs_path) ?: 'application/pdf';
+
+                if (method_exists($disk, 'readStream')) {
+                    $stream = $disk->readStream($pf->gcs_path);
+                    if ($stream === false) {
+                        throw new \RuntimeException('readStream returned false');
+                    }
+
+                    return response()->stream(function () use ($stream) {
+                        while (!feof($stream)) {
+                            echo fread($stream, 8192);
+                        }
+                        if (is_resource($stream)) {
+                            fclose($stream);
+                        }
+                    }, 200, [
+                        'Content-Type' => $mime,
+                        'Content-Disposition' => 'attachment; filename="' . $downloadFilename . '"',
+                    ]);
+                }
+
+                $contents = $disk->get($pf->gcs_path);
+                return response($contents, 200)
+                    ->header('Content-Type', $mime)
+                    ->header('Content-Disposition', 'attachment; filename="' . $downloadFilename . '"');
+            }
+        } catch (\Exception $e) {
+            Log::error('ProcessedFileController::downloadOriginal error', [
+                'exception' => $e,
+                'id' => $id,
+            ]);
+        }
+
+        // Fallback locale se presente
+        $local = storage_path('app/uploads/' . basename($pf->gcs_path));
+        if (file_exists($local)) {
+            $mime = mime_content_type($local) ?: 'application/pdf';
+            return response()->download($local, $downloadFilename, ['Content-Type' => $mime]);
+        }
+
+        return abort(404);
+    }
+
+    /**
      * Elimina (soft delete) un ProcessedFile
      */
     public function destroy($id)

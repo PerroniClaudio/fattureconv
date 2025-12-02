@@ -13,6 +13,7 @@ const successStatuses = new Set(["merged", "completed"]);
 const runningStatuses = new Set(["merging"]);
 
 const downloadRoutes = {
+    original: (id) => `/processed-files/${id}/download-original`,
     word: (id) => `/processed-files/${id}/download`,
     pdf: (id) => `/processed-files/${id}/download-merged`,
 };
@@ -81,6 +82,13 @@ function applyProcessedData(data = {}) {
     }
     if (typeof data.error_message !== "undefined") {
         updates.error_message = data.error_message;
+    }
+    if (typeof data.gcs_path !== "undefined") {
+        const hasOriginal = Boolean(data.gcs_path);
+        updates.original_available = hasOriginal;
+        updates.original_url = hasOriginal
+            ? getCachedFileById(id)?.original_url || downloadRoutes.original(id)
+            : null;
     }
     if (typeof data.word_path !== "undefined") {
         updates.word_available = Boolean(data.word_path);
@@ -187,6 +195,14 @@ export function renderArchiveList(files = []) {
 
         const dateLabel = node.querySelector("[data-file-date]");
         if (dateLabel) dateLabel.textContent = formatDate(file?.created_at);
+
+        const originalButton = node.querySelector("[data-download-original]");
+        configureActionButton(
+            originalButton,
+            Boolean(file?.original_available && file?.original_url),
+            () => downloadOriginalFile(file.original_url),
+            "File originale non disponibile"
+        );
 
         const wordButton = node.querySelector("[data-download-word]");
         configureActionButton(
@@ -680,6 +696,10 @@ export function downloadWordFile(url) {
 }
 
 export function downloadPdfFile(url) {
+    triggerDownload(url);
+}
+
+export function downloadOriginalFile(url) {
     triggerDownload(url);
 }
 

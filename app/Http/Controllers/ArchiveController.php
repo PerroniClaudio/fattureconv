@@ -22,6 +22,7 @@ class ArchiveController extends Controller
             ->get([
                 'id',
                 'original_filename',
+                'gcs_path',
                 'created_at',
                 'word_path',
                 'merged_pdf_path',
@@ -88,11 +89,15 @@ class ArchiveController extends Controller
                 'error_message' => $file->error_message,
                 'word_available' => !empty($file->word_path),
                 'pdf_available' => !empty($file->merged_pdf_path),
+                'original_available' => !empty($file->gcs_path),
                 'word_url' => $file->word_path
                     ? route('processed-files.download', $file->id)
                     : null,
                 'pdf_url' => $file->merged_pdf_path
                     ? route('processed-files.download-merged', $file->id)
+                    : null,
+                'original_url' => $file->gcs_path
+                    ? route('processed-files.download-original', $file->id)
                     : null,
             ];
         })->values()->all();
