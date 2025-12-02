@@ -128,4 +128,22 @@ class GenerateFattura implements ShouldQueue
             return;
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        $processedFile = ProcessedFile::find($this->processedFileId);
+        if ($processedFile) {
+            $processedFile->status = 'failed';
+            $processedFile->error_message = substr($exception->getMessage(), 0, 1000);
+            $processedFile->save();
+            
+            Log::error('GenerateFattura job failed (failed method)', [
+                'id' => $this->processedFileId,
+                'error' => $exception->getMessage()
+            ]);
+        }
+    }
 }

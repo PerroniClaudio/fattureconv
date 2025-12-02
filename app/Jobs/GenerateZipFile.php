@@ -47,7 +47,7 @@ class GenerateZipFile implements ShouldQueue
 
             $files_to_zip = ProcessedFile::where('created_at', '>=', $this->zipExport->start_date)
                 ->where('created_at', '<', Carbon::parse($this->zipExport->end_date)->addDay())
-                ->where('status', 'completed')
+                ->whereNotIn('status', ['error', 'merge_error'])
                 ->whereNull('deleted_at') // Esclude esplicitamente i file con soft delete
                 ->get();
 
@@ -140,6 +140,23 @@ class GenerateZipFile implements ShouldQueue
             }
             
             throw $e;
+        }
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        if ($this->zipExport) {
+            $this->zipExport->status = 'failed';
+            $this->zipExport->error_message = substr($exception->getMessage(), 0, 1000);
+            $this->zipExport->save();
+            
+            Log::error('GenerateZipFile job failed (failed method)', [
+                'id' => $this->zipExport->id,
+                'error' => $exception->getMessage()
+            ]);
         }
     }
 }
