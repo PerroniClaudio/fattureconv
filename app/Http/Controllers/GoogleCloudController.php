@@ -106,7 +106,14 @@ class GoogleCloudController extends Controller
                 throw new \Exception('Google Cloud credentials incomplete: client_email or private_key missing in config.');
             }
 
+            // Fix private key formatting if it contains literal \n (common issue with .env files)
+            if (isset($keyFileConfig['private_key']) && strpos($keyFileConfig['private_key'], '\\n') !== false) {
+                $keyFileConfig['private_key'] = str_replace('\\n', "\n", $keyFileConfig['private_key']);
+            }
+
             $clientOptions['credentials'] = $keyFileConfig;
+            // Force REST transport to avoid gRPC authentication loops and compatibility issues
+            $clientOptions['transport'] = 'rest';
 
             $client = new PredictionServiceClient($clientOptions);
             $response = $client->generateContent($genReq);
