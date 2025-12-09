@@ -10,6 +10,9 @@ use Google\Cloud\AIPlatform\V1\Content;
 use Google\Cloud\AIPlatform\V1\GenerateContentRequest;
 use Google\Cloud\AIPlatform\V1\Part;
 use Google\Cloud\AIPlatform\V1\GenerationConfig;
+use Google\Cloud\DocumentAI\V1\Client\DocumentProcessorServiceClient;
+use Google\Cloud\DocumentAI\V1\ProcessRequest;
+use Google\Cloud\DocumentAI\V1\RawDocument;
 use Exception;
 
 use Google\ApiCore\ApiException;
@@ -145,6 +148,83 @@ class GoogleCloudController extends Controller
             throw $e;
         } finally {
             // Chiudi il client (libera risorse) se necessario
+            if (isset($client) && method_exists($client, 'close')) {
+                $client->close();
+            }
+        }
+    }
+
+    /**
+     * Esegue OCR con Document AI su un PDF già caricato su GCS e restituisce il testo estratto.
+     *
+     * @param string $gcsPath Percorso dell'oggetto sul bucket (es. processed_files/abc.pdf)
+     * @param string $mimeType MIME type del documento, default application/pdf
+     * @return array{text: string, document?: array, pages?: int} Testo e metadati minimi
+     * @throws \Exception in caso di configurazione/IO/API error
+     */
+    public function processWithDocumentAI(string $gcsPath, string $mimeType = 'application/pdf'): array
+    {
+        $projectId = config('google.key_file.project_id');
+        $location = env('GOOGLE_CLOUD_LOCATION', 'eu');
+        $processorId = env('GOOGLE_DOC_AI_PROCESSOR_ID');
+
+        if (empty($projectId) || empty($processorId)) {
+            throw new \Exception('Configurazione Document AI mancante: GOOGLE_CLOUD_PROJECT_ID o GOOGLE_DOC_AI_PROCESSOR_ID non impostati.');
+        }
+
+        // Recupera il file dal bucket GCS configurato
+        $disk = Storage::disk('gcs');
+        if (!$disk->exists($gcsPath)) {
+            throw new \Exception("File non trovato su GCS: {$gcsPath}");
+        }
+        $fileBytes = $disk->get($gcsPath);
+
+        // Opzioni client e credenziali
+        $keyFileConfig = config('google.key_file');
+        if (empty($keyFileConfig) || !is_array($keyFileConfig)) {
+            throw new \Exception('Google Cloud credentials not provided in config. Please check config/google.php configuration.');
+        }
+        if (empty($keyFileConfig['client_email']) || empty($keyFileConfig['private_key'])) {
+            throw new \Exception('Google Cloud credentials incomplete: client_email or private_key missing in config.');
+        }
+        if (isset($keyFileConfig['private_key']) && strpos($keyFileConfig['private_key'], '\\n') !== false) {
+            $keyFileConfig['private_key'] = str_replace('\\n', "\n", $keyFileConfig['private_key']);
+        }
+
+        $clientOptions = [
+            'credentials' => $keyFileConfig,
+            // Endpoint regionale richiesto da Document AI
+            'apiEndpoint' => sprintf('%s-documentai.googleapis.com', $location),
+            // Forza REST per evitare problemi gRPC nei runtime serverless
+            'transport' => 'rest',
+        ];
+
+        $client = new DocumentProcessorServiceClient($clientOptions);
+        $processorName = $client->processorName($projectId, $location, $processorId);
+
+        $rawDocument = (new RawDocument())
+            ->setContent($fileBytes)
+            ->setMimeType($mimeType);
+
+        $request = (new ProcessRequest())
+            ->setName($processorName)
+            ->setRawDocument($rawDocument);
+
+        try {
+            $result = $client->processDocument($request);
+            $document = $result->getDocument();
+
+            return [
+                'text' => $document->getText(),
+                // JSON completo opzionale per debugging/estrazioni avanzate
+                'document' => json_decode($document->serializeToJsonString(), true),
+                'pages' => $document->getPages()->count(),
+            ];
+        } catch (ApiException $e) {
+            throw new \Exception('Errore Document AI: ' . $e->getMessage(), $e->getCode(), $e);
+        } catch (\Exception $e) {
+            throw $e;
+        } finally {
             if (isset($client) && method_exists($client, 'close')) {
                 $client->close();
             }

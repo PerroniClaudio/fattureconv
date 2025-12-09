@@ -15,6 +15,7 @@
         "codeat3/blade-file-icons": "^1.10",
         "google/apiclient": "^2.18",
         "google/cloud-ai-platform": "^1.38",
+        "google/cloud-document-ai": "^2.5",
         "laravel/framework": "^12.0",
         "laravel/scout": "^10.21",
         "laravel/socialite": "^5.23",

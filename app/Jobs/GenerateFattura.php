@@ -52,12 +52,32 @@ class GenerateFattura implements ShouldQueue
             $pdfParser = new PdfParserController();
             $text = $pdfParser->extractAndOptimize($processedFile);
 
+            $google = new GoogleCloudController();
+
+            // Se il testo estratto è troppo breve, prova l'OCR con Document AI
+            if (strlen(trim($text)) < 50) {
+                $currentStep = 'ocr_pending';
+                $processedFile->status = $currentStep;
+                $processedFile->save();
+
+                $ocrResult = $google->processWithDocumentAI($processedFile->gcs_path);
+                $text = $ocrResult['text'] ?? '';
+
+                if (strlen(trim($text)) < 10) {
+                    throw new Exception('PDF senza testo e OCR non ha restituito contenuto utile.');
+                }
+
+                // Salva il testo OCR per tracciamento
+                $processedFile->extracted_text = $text;
+                $processedFile->status = 'ocr_completed';
+                $processedFile->save();
+            }
+
             // 2) Chiama Vertex AI per estrarre i dati strutturati
             $currentStep = 'calling_ai';
             $processedFile->status = $currentStep;
             $processedFile->save();
 
-            $google = new GoogleCloudController();
             $response = $google->callVertexAI($text);
 
             // Salva risposta strutturata e testo
