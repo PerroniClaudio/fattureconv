@@ -88,6 +88,9 @@ class DocumentController extends Controller
             // Assicuriamoci di avere l'array $ai con i campi principali
             if (is_array($data) && array_key_exists('account_holder', $data)) {
                 $ai = $data;
+            } elseif (is_array($data) && isset($data[0]) && is_array($data[0]) && array_key_exists('account_holder', $data[0])) {
+                // Se il modello restituisce un array di fatture (preferito), usa la prima
+                $ai = $data[0];
             } elseif (is_array($data) && isset($data[0]) && is_array($data[0]) && array_key_exists('fornitore', $data[0])) {
                 $ai = $data[0];
             } else {
@@ -127,7 +130,7 @@ class DocumentController extends Controller
             ];
 
             foreach ($map as $key => $value) {
-                $tp->setValue($key, htmlspecialchars($value));
+                $tp->setValue($key, $this->escapeForWord($value));
             }
             
             // Se ci sono items, costruisci una tabella valida e sostituisci il placeholder con setComplexBlock
@@ -172,10 +175,10 @@ class DocumentController extends Controller
 
                     foreach ($normalized as $it) {
                         $table->addRow();
-                        $table->addCell()->addText((string)$it['descrizione']);
-                        $table->addCell()->addText((string)$it['imponibile']);
-                        $table->addCell()->addText((string)$it['iva']);
-                        $table->addCell()->addText((string)$it['importo_iva']);
+                        $table->addCell()->addText($this->escapeForWord((string)$it['descrizione']));
+                        $table->addCell()->addText($this->escapeForWord((string)$it['imponibile']));
+                        $table->addCell()->addText($this->escapeForWord((string)$it['iva']));
+                        $table->addCell()->addText($this->escapeForWord((string)$it['importo_iva']));
                     }
 
                     $tp->setComplexBlock('tabella_items', $table);
@@ -230,6 +233,24 @@ class DocumentController extends Controller
             Log::warning('formatDate failed to parse date', ['date' => $date, 'exception' => $e]);
             return '';
         }
+    }
+
+    /**
+     * Escape di sicurezza per valori inseriti in Word (TemplateProcessor e tabelle).
+     */
+    private function escapeForWord($value): string
+    {
+        if (is_null($value)) {
+            return '';
+        }
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+        if (is_scalar($value)) {
+            return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE | ENT_XML1);
+        }
+        // fallback per array/oggetti
+        return htmlspecialchars(json_encode($value, JSON_UNESCAPED_UNICODE), ENT_QUOTES | ENT_SUBSTITUTE | ENT_XML1);
     }
 
 }

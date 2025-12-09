@@ -17,7 +17,7 @@ use Google\ApiCore\ApiException;
 class GoogleCloudController extends Controller
 {
 
-    private $defaultPrompt = "Sei un esperto di fatture estere. Analizza il testo fornito e estrai SOLO le seguenti informazioni chiave:
+    private $defaultPrompt = "Sei un esperto di fatture estere. Analizza il testo e restituisci un ARRAY JSON di tutte le fatture trovate (anche se è una sola, deve essere comunque un array con un oggetto). Per ogni fattura estrai:
             - account_holder: nome dell'azienda fornitrice
             - address: indirizzo completo dell'azienda fornitrice
             - vat_number: partita IVA (se presente)
@@ -31,8 +31,10 @@ class GoogleCloudController extends Controller
             - items: array di oggetti con descrizione, imponibile + valuta, %iva o art. esenzione, importo iva
 
             Ignora header, footer, loghi o testo irrilevante. Se un campo non è presente, usa 'N/A'.
-            Rispondi SOLO con un JSON valido, senza testo aggiuntivo, nemmeno ```json: 
-            {\"fornitore\":\"...\", \"data_emissione\":\"...\", ...}"; // Prompt di default ottimizzato per fatture estere (riduce token)
+            Rispondi SOLO con un JSON valido e sintatticamente corretto, senza testo aggiuntivo, nemmeno ```json:
+            [
+                {\"account_holder\":\"...\", \"data_emissione\":\"...\", ...}
+            ]"; 
 
 
     /**
@@ -55,7 +57,7 @@ class GoogleCloudController extends Controller
      * @return mixed Risposta di Vertex AI (placeholder)
      */
 
-    public function callVertexAI(string $testo, ?string $prompt = null, string $model = 'gemini-2.5-pro'): array
+    public function callVertexAI(string $testo, ?string $prompt = null, string $model = 'gemini-3-pro-preview'): array
     {
         $projectId = config('google.key_file.project_id', 'tuo-progetto-default');
         $location = env('GOOGLE_CLOUD_LOCATION', 'eu-west8');
