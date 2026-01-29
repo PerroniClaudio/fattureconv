@@ -252,8 +252,10 @@ class OpenAIController extends Controller
             $contents = $disk->get($gcsPath);
             file_put_contents($localPath, $contents);
 
+            $relativePath = ltrim(str_replace(storage_path('app'), '', $localPath), DIRECTORY_SEPARATOR);
+            $fileBytes = Storage::disk('local')->get($relativePath);
             $upload = $this->openai()
-                ->attach('file', file_get_contents($localPath), basename($localPath))
+                ->attach('file', $fileBytes, basename($localPath))
                 ->post('/v1/files', [
                     'purpose' => 'user_data',
                 ]);

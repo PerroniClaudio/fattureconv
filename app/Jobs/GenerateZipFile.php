@@ -87,8 +87,18 @@ class GenerateZipFile implements ShouldQueue
             $this->zipExport->update(['status' => 'uploading']);
             
             $gcsPath = 'zip-exports/' . $zipFileName;
-            $zipContent = file_get_contents($zipPath);
-            $disk->put($gcsPath, $zipContent);
+            $stream = fopen($zipPath, 'r');
+            if ($stream === false) {
+                throw new \Exception('Impossibile aprire il file ZIP per l\'upload');
+            }
+            if (method_exists($disk, 'putStream')) {
+                call_user_func([$disk, 'putStream'], $gcsPath, $stream);
+            } else {
+                $disk->put($gcsPath, $stream);
+            }
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
 
             // 5. Elimina i file temporanei
             $this->zipExport->update(['status' => 'cleaning_up']);

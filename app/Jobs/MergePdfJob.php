@@ -6,6 +6,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 use App\Models\ProcessedFile;
 use setasign\Fpdi\Fpdi;
 use CloudConvert\CloudConvert;
@@ -195,7 +196,11 @@ class MergePdfJob implements ShouldQueue
             
             // Download del PDF convertito
             Log::info('CloudConvert: Download PDF', ['url' => $file->url]);
-            $pdfContent = file_get_contents($file->url);
+            $response = Http::get($file->url);
+            if (!$response->successful()) {
+                throw new Exception('CloudConvert: Download PDF fallito, status ' . $response->status());
+            }
+            $pdfContent = $response->body();
             
             if (!$pdfContent) {
                 throw new Exception('CloudConvert: Impossibile scaricare il PDF convertito');
