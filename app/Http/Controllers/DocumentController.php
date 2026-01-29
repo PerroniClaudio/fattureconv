@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use PhpOffice\PhpWord\TemplateProcessor;
-use Illuminate\Support\Facades\Storage;
 use App\Models\ProcessedFile;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
@@ -24,8 +23,8 @@ class DocumentController extends Controller
     }
 
     /**
-     * Genera un file Word a partire dal template presente in GCS e dai dati
-     * estratti da Vertex AI salvati nel ProcessedFile.
+     * Genera un file Word a partire dal template nello storage di default e dai dati
+     * estratti dall'AI salvati nel ProcessedFile.
      *
      * @param ProcessedFile $processedFile
      * @return string percorso del file creato (storage path)
@@ -33,10 +32,9 @@ class DocumentController extends Controller
     public function generateFromTemplate(ProcessedFile $processedFile): string
     {
         // Percorsi
-        $templatePathInBucket = 'templates/ift_template_fatture.docx';
-        $disk = Storage::disk('gcs');
+        $templatePath = storage_path('app/templates/ift_template_fatture.docx');
 
-        // Scarica template in locale (usa temporaryUrl se disponibile)
+        // Copia template in locale
         $tmpDir = storage_path('app/processed_words');
         if (!is_dir($tmpDir)) {
             mkdir($tmpDir, 0755, true);
@@ -45,34 +43,11 @@ class DocumentController extends Controller
         $tmpTemplate = $tmpDir . DIRECTORY_SEPARATOR . 'template_' . Str::uuid()->toString() . '.docx';
 
         try {
-            if (method_exists($disk, 'temporaryUrl')) {
-                $url = $disk->temporaryUrl($templatePathInBucket, now()->addMinutes(30));
-                $resp = \Illuminate\Support\Facades\Http::get($url);
-                if (!$resp->successful()) {
-                    throw new \Exception('Impossibile scaricare template da GCS, status ' . $resp->status());
-                }
-                file_put_contents($tmpTemplate, $resp->body());
-            } else {
-                // fallback: getStream / get
-                if (method_exists($disk, 'readStream')) {
-                    $stream = $disk->readStream($templatePathInBucket);
-                    if ($stream && is_resource($stream)) {
-                        $out = fopen($tmpTemplate, 'w');
-                        while (!feof($stream)) {
-                            $chunk = fread($stream, 8192);
-                            if ($chunk === false) break;
-                            fwrite($out, $chunk);
-                        }
-                        fclose($out);
-                        if (is_resource($stream)) fclose($stream);
-                    } else {
-                        $contents = $disk->get($templatePathInBucket);
-                        file_put_contents($tmpTemplate, $contents);
-                    }
-                } else {
-                    $contents = $disk->get($templatePathInBucket);
-                    file_put_contents($tmpTemplate, $contents);
-                }
+            if (!file_exists($templatePath)) {
+                throw new \Exception('Template non trovato in storage/app/templates.');
+            }
+            if (!copy($templatePath, $tmpTemplate)) {
+                throw new \Exception('Impossibile copiare il template nello storage locale.');
             }
 
             // Prepara i dati AI

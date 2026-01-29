@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Models\ProcessedFile;
 use App\Http\Controllers\PdfParserController;
-use App\Http\Controllers\GoogleCloudController;
+use App\Http\Controllers\OpenAIController;
 use App\Http\Controllers\DocumentController;
 use Exception;
 
@@ -52,7 +52,7 @@ class GenerateFattura implements ShouldQueue
             $pdfParser = new PdfParserController();
             $text = $pdfParser->extractAndOptimize($processedFile);
 
-            $google = new GoogleCloudController();
+            $openai = new OpenAIController();
 
             // Se il testo estratto è troppo breve, prova l'OCR con Document AI
             if (strlen(trim($text)) < 50) {
@@ -60,7 +60,7 @@ class GenerateFattura implements ShouldQueue
                 $processedFile->status = $currentStep;
                 $processedFile->save();
 
-                $ocrResult = $google->processWithDocumentAI($processedFile->gcs_path);
+                $ocrResult = $openai->processWithOpenAI($processedFile->gcs_path);
                 $text = $ocrResult['text'] ?? '';
 
                 if (strlen(trim($text)) < 10) {
@@ -78,7 +78,7 @@ class GenerateFattura implements ShouldQueue
             $processedFile->status = $currentStep;
             $processedFile->save();
 
-            $response = $google->callVertexAI($text);
+            $response = $openai->callOpenAI($text);
 
             // Salva risposta strutturata e testo
             $processedFile->structured_json = $response;
@@ -98,13 +98,13 @@ class GenerateFattura implements ShouldQueue
             $processedFile->status = 'word_generated';
             $processedFile->save();
 
-            // 4) Carica il file Word su bucket GCS e salva il path nel modello
+            // 4) Carica il file Word sul filesystem configurato e salva il path nel modello
             $currentStep = 'uploading_word';
             $processedFile->status = $currentStep;
             $processedFile->save();
 
             if (file_exists($localWordPath)) {
-                $disk = Storage::disk('gcs');
+                $disk = Storage::disk(config('filesystems.default'));
                 $gcsPath = 'processed_words/' . basename($localWordPath);
 
                 // Apri stream e carica

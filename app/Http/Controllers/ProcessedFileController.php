@@ -100,7 +100,7 @@ class ProcessedFileController extends Controller
     }
 
     /**
-     * Scarica il file Word dal bucket (se presente) oppure dal storage locale
+     * Scarica il file Word dal filesystem configurato (se presente) oppure dal storage locale
      */
     public function download($id)
     {
@@ -116,7 +116,7 @@ class ProcessedFileController extends Controller
 
         if (!empty($pf->word_path)) {
             try {
-                $disk = Storage::disk('gcs');
+                $disk = Storage::disk(config('filesystems.default'));
                 // prefer readStream
                 if (method_exists($disk, 'readStream')) {
                     $stream = $disk->readStream($pf->word_path);
@@ -155,7 +155,7 @@ class ProcessedFileController extends Controller
     }
 
     /**
-     * Scarica il PDF originale dal bucket (se presente) oppure dal fallback locale.
+     * Scarica il PDF originale dal filesystem configurato (se presente) oppure dal fallback locale.
      */
     public function downloadOriginal($id)
     {
@@ -171,7 +171,7 @@ class ProcessedFileController extends Controller
         $downloadFilename = $sanitizedBase . '.' . $extension;
 
         try {
-            $disk = Storage::disk('gcs');
+            $disk = Storage::disk(config('filesystems.default'));
             if ($disk->exists($pf->gcs_path)) {
                 $mime = $disk->mimeType($pf->gcs_path) ?: 'application/pdf';
 
@@ -258,7 +258,7 @@ class ProcessedFileController extends Controller
         }
 
         try {
-            $disk = Storage::disk('gcs');
+            $disk = Storage::disk(config('filesystems.default'));
             if (!$disk->exists($pf->merged_pdf_path)) {
                 return abort(404);
             }

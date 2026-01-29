@@ -132,7 +132,7 @@ class ZipExportController extends Controller
 
         if (!empty($zip->gcs_path)) {
             try {
-                $disk = Storage::disk('gcs');
+                $disk = Storage::disk(config('filesystems.default'));
                 if (method_exists($disk, 'readStream')) {
                     $stream = $disk->readStream($zip->gcs_path);
                     if ($stream === false) throw new \Exception('readStream returned false');

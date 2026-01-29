@@ -18,14 +18,14 @@ class PdfParserController extends Controller
      */
     public function extractAndOptimize(ProcessedFile $processedFile): string
     {
-        // Otteniamo il path nel bucket dal modello
+        // Otteniamo il path sul filesystem dal modello
         $gcsPath = $processedFile->gcs_path;
         if (empty($gcsPath)) {
             throw new \InvalidArgumentException('ProcessedFile senza gcs_path');
         }
 
-        // Scarichiamo temporaneamente il file dal disco 'gcs'
-        $disk = Storage::disk('gcs');
+        // Scarichiamo temporaneamente il file dal disco di default
+        $disk = Storage::disk(config('filesystems.default'));
         $tmpDir = storage_path('app/temp_pdfs');
         if (!is_dir($tmpDir)) {
             mkdir($tmpDir, 0755, true);

@@ -56,7 +56,7 @@ class MergePdfJob implements ShouldQueue
         $currentStep = 'started';
 
         try {
-            $disk = Storage::disk('gcs');
+            $disk = Storage::disk(config('filesystems.default'));
 
             // 1) Scarica il file Word da GCS (in memoria)
             $currentStep = 'downloading_word';

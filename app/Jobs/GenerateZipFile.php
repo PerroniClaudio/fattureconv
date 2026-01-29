@@ -32,7 +32,7 @@ class GenerateZipFile implements ShouldQueue
     public function handle(): void
     {
         try {
-            $disk = Storage::disk('gcs');
+            $disk = Storage::disk(config('filesystems.default'));
             
             // 1. Crea una cartella temporanea
             $this->zipExport->update(['status' => 'creating_folder']);

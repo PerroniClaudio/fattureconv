@@ -41,7 +41,7 @@ class UploadController extends Controller
         ]);
 
         $files = $request->file('pdf');
-        $disk = Storage::disk('gcs');
+        $disk = Storage::disk(config('filesystems.default'));
 
         $successes = [];
         $errors = [];
@@ -59,10 +59,10 @@ class UploadController extends Controller
             try {
                 $objectPath = 'uploads/' . $filename;
 
-                // Carichiamo sul disco GCS configurato
+                // Carichiamo sul filesystem configurato (disco di default)
                 $disk->putFileAs('uploads', $file, $filename);
 
-                // Aggiorniamo il record con il path (object name) nel bucket
+                // Aggiorniamo il record con il path nel disco
                 $processed->update([
                     'gcs_path' => $objectPath,
                     'status' => 'uploaded',
@@ -145,7 +145,7 @@ class UploadController extends Controller
         ]);
 
         try {
-            $disk = Storage::disk('gcs');
+            $disk = Storage::disk(config('filesystems.default'));
             $objectPath = 'uploads/' . $filename;
 
             $disk->putFileAs('uploads', $file, $filename);

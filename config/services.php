@@ -47,4 +47,10 @@ return [
         'sandbox' => env('CLOUDCONVERT_SANDBOX', false),
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        'ocr_model' => env('OPENAI_OCR_MODEL', env('OPENAI_MODEL', 'gpt-4o-mini')),
+    ],
+
 ];

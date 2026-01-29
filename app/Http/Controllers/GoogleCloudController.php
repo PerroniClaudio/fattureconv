@@ -173,7 +173,7 @@ class GoogleCloudController extends Controller
         }
 
         // Recupera il file dal bucket GCS configurato
-        $disk = Storage::disk('gcs');
+        $disk = Storage::disk(config('filesystems.default'));
         if (!$disk->exists($gcsPath)) {
             throw new \Exception("File non trovato su GCS: {$gcsPath}");
         }

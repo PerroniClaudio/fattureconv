@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Storage;
 
 // Assets pubblici (favicon, logo)
 Route::get('/favicon.ico', function () {
-    $disk = Storage::disk('gcs');
+    $disk = Storage::disk(config('filesystems.default'));
     $path = 'assets/favicon-ift.png';
 
     try {
@@ -36,7 +36,7 @@ Route::get('/favicon.ico', function () {
 });
 
 Route::get('/logo', function () {
-    $disk = Storage::disk('gcs');
+    $disk = Storage::disk(config('filesystems.default'));
     $path = 'assets/logo-header-ift.png';
 
     try {
