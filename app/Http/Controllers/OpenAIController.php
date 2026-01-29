@@ -238,24 +238,12 @@ class OpenAIController extends Controller
             throw new Exception("File non trovato nello storage: {$gcsPath}");
         }
 
-        $tmpDir = storage_path('app/temp_ocr');
-        if (!is_dir($tmpDir)) {
-            mkdir($tmpDir, 0755, true);
-        }
-
-        $tmpFilename = Str::uuid()->toString() . '_' . basename($gcsPath);
-        $localPath = $tmpDir . DIRECTORY_SEPARATOR . $tmpFilename;
-
         $fileId = null;
 
         try {
-            $contents = $disk->get($gcsPath);
-            file_put_contents($localPath, $contents);
-
-            $relativePath = ltrim(str_replace(storage_path('app'), '', $localPath), DIRECTORY_SEPARATOR);
-            $fileBytes = Storage::disk('local')->get($relativePath);
+            $fileBytes = $disk->get($gcsPath);
             $upload = $this->openai()
-                ->attach('file', $fileBytes, basename($localPath))
+                ->attach('file', $fileBytes, basename($gcsPath))
                 ->post('/v1/files', [
                     'purpose' => 'user_data',
                 ]);
@@ -303,9 +291,6 @@ class OpenAIController extends Controller
                 } catch (Exception $e) {
                     Log::warning('OpenAIController::processWithOpenAI cleanup failed', ['exception' => $e, 'file_id' => $fileId]);
                 }
-            }
-            if (isset($localPath) && file_exists($localPath)) {
-                @unlink($localPath);
             }
         }
     }

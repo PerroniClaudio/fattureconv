@@ -7,6 +7,7 @@ use PhpOffice\PhpWord\TemplateProcessor;
 use App\Models\ProcessedFile;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
 
 class DocumentController extends Controller
@@ -32,9 +33,10 @@ class DocumentController extends Controller
     public function generateFromTemplate(ProcessedFile $processedFile): string
     {
         // Percorsi
-        $templatePath = storage_path('app/templates/ift_template_fatture.docx');
+        $templatePath = 'templates/ift_template_fatture.docx';
+        $disk = Storage::disk(config('filesystems.default'));
 
-        // Copia template in locale
+        // Copia template in locale dal disco configurato
         $tmpDir = storage_path('app/processed_words');
         if (!is_dir($tmpDir)) {
             mkdir($tmpDir, 0755, true);
@@ -43,11 +45,27 @@ class DocumentController extends Controller
         $tmpTemplate = $tmpDir . DIRECTORY_SEPARATOR . 'template_' . Str::uuid()->toString() . '.docx';
 
         try {
-            if (!file_exists($templatePath)) {
-                throw new \Exception('Template non trovato in storage/app/templates.');
+            if (!$disk->exists($templatePath)) {
+                throw new \Exception('Template non trovato nello storage configurato.');
             }
-            if (!copy($templatePath, $tmpTemplate)) {
-                throw new \Exception('Impossibile copiare il template nello storage locale.');
+            if (method_exists($disk, 'readStream')) {
+                $stream = $disk->readStream($templatePath);
+                if ($stream && is_resource($stream)) {
+                    $out = fopen($tmpTemplate, 'w');
+                    while (!feof($stream)) {
+                        $chunk = fread($stream, 8192);
+                        if ($chunk === false) break;
+                        fwrite($out, $chunk);
+                    }
+                    fclose($out);
+                    fclose($stream);
+                } else {
+                    $contents = $disk->get($templatePath);
+                    file_put_contents($tmpTemplate, $contents);
+                }
+            } else {
+                $contents = $disk->get($templatePath);
+                file_put_contents($tmpTemplate, $contents);
             }
 
             // Prepara i dati AI
@@ -206,15 +224,9 @@ class DocumentController extends Controller
             return response()->json(['error' => 'File non valido'], 422);
         }
 
-        $targetDir = storage_path('app/templates');
-        if (!is_dir($targetDir)) {
-            mkdir($targetDir, 0755, true);
-        }
-
-        $targetPath = $targetDir . DIRECTORY_SEPARATOR . 'ift_template_fatture.docx';
-        if (!copy($file->getPathname(), $targetPath)) {
-            return response()->json(['error' => 'Impossibile salvare il template'], 500);
-        }
+        $disk = Storage::disk(config('filesystems.default'));
+        $targetPath = 'templates/ift_template_fatture.docx';
+        $disk->putFileAs('templates', $file, 'ift_template_fatture.docx');
 
         return response()->json([
             'ok' => true,
