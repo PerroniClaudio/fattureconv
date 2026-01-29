@@ -89,6 +89,11 @@ Route::middleware('auth')->group(function () {
         return view('exports');
     })->name('exports.page');
 
+    // Template upload page
+    Route::get('/templates', function () {
+        return view('templates');
+    })->name('templates.page');
+
     // Upload
     Route::post('/upload', [UploadController::class, 'uploadLocal'])
         ->name('upload');
@@ -113,6 +118,10 @@ Route::middleware('auth')->group(function () {
             'fatture_export_' . $start_date . '_to_' . $end_date . '.xlsx'
         );
     })->name('export');
+
+    // Upload template docx
+    Route::post('/templates/upload', [DocumentController::class, 'uploadTemplate'])
+        ->name('templates.upload');
 
     // Download file
     Route::get('/processed-files/{id}/download', 

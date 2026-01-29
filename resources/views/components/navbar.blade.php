@@ -9,6 +9,7 @@
                 <li><a href="{{ route('exports.page') }}">Esporta Excel</a></li>
                 <li><a href="/zip-exports">Esportazioni ZIP</a></li>
                 <li><a href="{{ route('archive.index') }}">Archivio</a></li>
+                <li><a href="{{ route('templates.page') }}">Template</a></li>
             @endauth
         </ul>
     </div>

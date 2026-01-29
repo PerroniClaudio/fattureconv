@@ -191,6 +191,37 @@ class DocumentController extends Controller
         }
     }
 
+    /**
+     * Carica il template .docx nello storage locale.
+     * Richiesta: field "template" (multipart/form-data)
+     */
+    public function uploadTemplate(Request $request)
+    {
+        $request->validate([
+            'template' => 'required|file|mimes:docx|max:5120',
+        ]);
+
+        $file = $request->file('template');
+        if (!$file || !$file->isValid()) {
+            return response()->json(['error' => 'File non valido'], 422);
+        }
+
+        $targetDir = storage_path('app/templates');
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0755, true);
+        }
+
+        $targetPath = $targetDir . DIRECTORY_SEPARATOR . 'ift_template_fatture.docx';
+        if (!copy($file->getPathname(), $targetPath)) {
+            return response()->json(['error' => 'Impossibile salvare il template'], 500);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'path' => $targetPath,
+        ], 200);
+    }
+
 
     /**
      * Format date string to dd/mm/YYYY or return empty string on failure
