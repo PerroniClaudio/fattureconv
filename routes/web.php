@@ -89,6 +89,11 @@ Route::middleware('auth')->group(function () {
         return view('exports');
     })->name('exports.page');
 
+    // Errors page
+    Route::get('/errors', function () {
+        return view('errors');
+    })->name('errors.page');
+
     // Template upload page
     Route::get('/templates', function () {
         return view('templates');

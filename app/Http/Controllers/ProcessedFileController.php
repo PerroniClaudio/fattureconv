@@ -25,6 +25,9 @@ class ProcessedFileController extends Controller
         if ($status) {
             if ($status === 'completed') {
                 $query->whereIn('status', ['completed', 'merged', 'merging']);
+            } elseif ($status === 'errors') {
+                $query->whereIn('status', ['error', 'errore', 'merge_error'])
+                    ->whereNotNull('error_message');
             } else {
                 $query->where('status', $status);
             }

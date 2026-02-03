@@ -54,9 +54,13 @@ export function formatDate(iso) {
  * @param {Object} item - Dati del job
  * @param {Object} options - Opzioni di rendering
  * @param {boolean} [options.includeDelete=false] - Se includere il bottone di eliminazione
+ * @param {boolean} [options.includeErrorAction=false] - Se includere l'opzione per aprire il modal errori
  * @returns {string} HTML dei pulsanti azione
  */
-function buildActionButtons(item, { includeDelete = false } = {}) {
+function buildActionButtons(
+    item,
+    { includeDelete = false, includeErrorAction = false } = {}
+) {
     if (!item || typeof item.id === "undefined" || item.id === null) {
         return `<button class="btn btn-sm btn-ghost" disabled>Non disponibile</button>`;
     }
@@ -99,6 +103,40 @@ function buildActionButtons(item, { includeDelete = false } = {}) {
     menuItems.push(
         `<li><button type="button" onclick="window.openMonthReferenceModal(${safeId}, '${monthRef}')">Modifica mese riferimento</button></li>`
     );
+
+    if (includeErrorAction) {
+        const status = (item.status || "").toLowerCase();
+        const hasError =
+            !!item.error_message ||
+            ["error", "errore", "merge_error"].includes(status);
+        if (hasError) {
+            const msg = item.error_message || "Errore non disponibile";
+            const structured = JSON.stringify(
+                item.structured_json || "",
+                null,
+                2
+            );
+            const extracted = item.extracted_text || "";
+            const fileAttr = item.original_filename || item.gcs_path || "";
+            const createdAt = item.created_at || "";
+            const wordPath = item.word_path || "";
+            menuItems.push(
+                `<li><button type="button" data-error="${escapeHtml(
+                    msg
+                )}" data-structured='${escapeHtml(
+                    structured
+                )}' data-extracted='${escapeHtml(
+                    extracted
+                )}' data-file="${escapeHtml(
+                    fileAttr
+                )}" data-created_at="${escapeHtml(
+                    createdAt
+                )}" data-id="${safeId}" data-word_path="${escapeHtml(
+                    wordPath
+                )}" onclick="showErrorElement(this)">Dettagli errore</button></li>`
+            );
+        }
+    }
 
     if (includeDelete) {
         const fileName = escapeHtml(
@@ -362,7 +400,10 @@ function populateCompletedRowElement(tr, row) {
               )} <span class="loading loading-spinner loading-xs align-middle"></span></span>`
             : `<span class="${badgeClass}">${escapeHtml(label)}</span>`;
 
-    const actions = buildActionButtons(row, { includeDelete: true });
+    const actions = buildActionButtons(row, {
+        includeDelete: true,
+        includeErrorAction: true,
+    });
 
     tr.setAttribute("data-status", status);
     tr.innerHTML = `<th>${escapeHtml(
@@ -860,6 +901,9 @@ export function initJobsTable() {
     // Rendi la funzione deleteProcessedFile disponibile globalmente
     window.deleteProcessedFile = deleteProcessedFile;
     window.triggerMerge = triggerMerge;
+    window.showErrorElement = showErrorElement;
+    window.copyToClipboard = copyToClipboard;
+    window.downloadStructuredJson = downloadStructuredJson;
 
     window.addEventListener("processed-file-updated", (event) => {
         const { id, month_reference } = event.detail;

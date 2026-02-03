@@ -119,6 +119,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             jobsModule.initJobsTable();
     }
 
+    // Errors Table: load only when element exists
+    if (document.getElementById("errors-table")) {
+        const errorsModule = await import("./errors-table");
+        if (typeof errorsModule.initErrorsTable === "function")
+            errorsModule.initErrorsTable();
+    }
+
     // Zip Exports UI: load only when form exists
     if (document.getElementById("zipExportForm")) {
         const zipModule = await import("./zip-exports");
