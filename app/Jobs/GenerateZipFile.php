@@ -51,16 +51,36 @@ class GenerateZipFile implements ShouldQueue
                 ->whereNull('deleted_at') // Esclude esplicitamente i file con soft delete
                 ->get();
 
-            // Scarica e copia i file nella cartella temporanea
+            // Scarica e copia i file nella cartella temporanea.
+            // Se esiste PDF merged, includi quello; altrimenti usa il DOCX generato.
             foreach ($files_to_zip as $processedFile) {
-                if ($processedFile->word_path) {
-                    $fileName = basename($processedFile->original_filename);
-                    $localPath = $tempDir . '/' . $fileName;
-                    
-                    // Scarica il file da GCS
-                    $fileContent = $disk->get($processedFile->word_path);
-                    file_put_contents($localPath, $fileContent);
+                $sourcePath = null;
+                $extension = null;
+
+                if (!empty($processedFile->merged_pdf_path)) {
+                    $sourcePath = $processedFile->merged_pdf_path;
+                    $extension = 'pdf';
+                } elseif (!empty($processedFile->word_path)) {
+                    $sourcePath = $processedFile->word_path;
+                    $extension = 'docx';
                 }
+
+                if (!$sourcePath || !$extension) {
+                    continue;
+                }
+
+                $baseName = pathinfo($processedFile->original_filename ?: basename($sourcePath), PATHINFO_FILENAME);
+                $sanitizedBase = preg_replace('/[^A-Za-z0-9_\-\. ]+/', '_', $baseName) ?: 'document_' . $processedFile->id;
+                $fileName = $sanitizedBase . '.' . $extension;
+                $localPath = $tempDir . '/' . $fileName;
+
+                // Evita collisioni tra file con stesso nome.
+                if (file_exists($localPath)) {
+                    $localPath = $tempDir . '/' . $sanitizedBase . '_' . $processedFile->id . '.' . $extension;
+                }
+
+                $fileContent = $disk->get($sourcePath);
+                file_put_contents($localPath, $fileContent);
             }
 
             // 3. Crea un file zip con i file nella cartella temporanea
